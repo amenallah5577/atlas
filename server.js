@@ -10,8 +10,10 @@ const multer = require('multer');
 const { extractPdfText } = require('./lib/pdf');
 const rateLimit = require('express-rate-limit');
 const { getOrCreateGuestSession } = require('./lib/session');
+const { configureDeployment, startServer } = require('./lib/deployment');
 
 const app = express();
+const deployment = configureDeployment(app, { database: mongoose });
 app.use(cors());
 app.use('/api/atlas/account/profile', express.json({ limit: '3mb' }));
 app.use(express.json());
@@ -86,6 +88,7 @@ app.get('/api/profile', profileMiddleware, (req, res) => {
     res.json({ mode: req.profile.mode });
 });
 
+if (process.env.ATLAS_STANDALONE === 'true') app.get('/', (req, res) => res.sendFile(__dirname + '/public/atlas.html'));
 app.get('/atlas', (req, res) => res.sendFile(__dirname + '/public/atlas.html'));
 const atlasRouter = require('./atlas/router').createAtlasRouter({ profileMiddleware });
 app.use('/api/atlas', atlasRouter);
@@ -98,11 +101,6 @@ app.get('/atlas/terms', (req, res) => res.sendFile(__dirname + '/public/atlas-te
 
 // Serve all other public files normally
 app.use(express.static('public'));
-
-// Connect to MongoDB
-if (require.main === module && process.env.MONGODB_URI) mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB!'))
-    .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // Define Database Schema
 const HistorySchema = new mongoose.Schema({
@@ -345,6 +343,15 @@ app.use((error, req, res, next) => {
     next();
 });
 
-const PORT = process.env.PORT || 3000;
-if (require.main === module) app.listen(PORT, () => console.log(`🚀 EchoSphere running on port ${PORT}`));
+if (require.main === module) startServer(app, { database: mongoose, state: deployment, beforeClose: () => atlasRouter.shutdown() })
+    .then(server => {
+        console.log('Atlas server listening on port ' + server.address().port);
+        const stop = () => {
+            const deadline = setTimeout(() => process.exit(1), 15_000);
+            deadline.unref();
+            server.shutdown().then(() => clearTimeout(deadline), () => { process.exitCode = 1; });
+        };
+        process.once('SIGTERM', stop);
+        process.once('SIGINT', stop);
+    }).catch(error => { console.error(error.message); process.exitCode = 1; });
 module.exports = app;

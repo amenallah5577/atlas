@@ -1,4 +1,6 @@
-require('dotenv').config({ quiet: true });
+const envFile = process.argv.find(value => value.startsWith('--env-file='))?.slice('--env-file='.length) || '.env';
+const accessFile = process.argv.find(value => value.startsWith('--access-file='))?.slice('--access-file='.length) || '.atlas-data/owner-access.txt';
+require('dotenv').config({ quiet: true, path: envFile });
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -7,7 +9,7 @@ const { createStore } = require('../atlas/store');
 const { hashPassword, TERMS_VERSION } = require('../atlas/accounts');
 
 function setLocalEnv(name, value) {
-    const filename = path.resolve('.env');
+    const filename = path.resolve(envFile);
     const existing = fs.existsSync(filename) ? fs.readFileSync(filename, 'utf8') : '';
     const lines = existing.split(/\r?\n/).filter(line => line && !line.startsWith(name + '='));
     lines.push(name + '=' + value);
@@ -66,7 +68,7 @@ async function main() {
     }
     const ownerId = process.env.ATLAS_OWNER_ID || crypto.randomUUID();
     const password = crypto.randomBytes(24).toString('base64url');
-    const filename = path.resolve('.atlas-data/owner-access.txt');
+    const filename = path.resolve(accessFile);
     if (fs.existsSync(filename)) throw new Error('Owner access file already exists. Preserve it before provisioning a different account.');
     const now = new Date().toISOString();
     await store.createUser({ _id: ownerId, email, name: 'Atlas owner', passwordHash: await hashPassword(password),
@@ -77,7 +79,7 @@ async function main() {
         { mode: 0o600, flag: 'wx' });
     setLocalEnv('ATLAS_OWNER_ID', ownerId);
     await store.audit({ actor: 'operator', action: 'owner.provisioned', target: ownerId, createdAt: now });
-    console.log('Owner provisioned. Generated credentials saved privately to .atlas-data/owner-access.txt.');
+    console.log('Owner provisioned. Generated credentials saved privately to ' + accessFile + '.');
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; })
     .finally(() => mongoose.disconnect());

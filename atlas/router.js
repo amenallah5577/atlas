@@ -54,6 +54,7 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
     const accounts = createAccounts({ store, env, providers: authProviders });
     const runs = new Map();
     const active = new Map();
+    let draining = false;
     const accountWrites = new Map();
     const accountMaintenance = new Set();
     const upload = multer({ storage: multer.memoryStorage(), limits: {
@@ -169,6 +170,7 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         standardHeaders: 'draft-8', legacyHeaders: false,
         message: { error: 'Too many messages. Wait a minute and try again.' } });
     router.post('/conversations/:id/messages', runLimiter, upload.single('file'), route(async (req, res) => {
+        if (draining) throw new AtlasError(503, 'Atlas is restarting. Your draft is retained; try again shortly.');
         const chat = await conversation(req);
         const ownerId = owner(req);
         if (chat.archived) throw new AtlasError(409, 'Restore this conversation before sending another message.');
@@ -217,7 +219,9 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
             mode: kind, attachment: req.file ? clean(req.file.originalname, 120) : '', createdAt: new Date().toISOString()
         };
         const controller = new AbortController();
-        const run = { id, owner: ownerId, conversation: chat._id, state: 'running',
+        let finishRun;
+        const completion = new Promise(resolve => { finishRun = resolve; });
+        const run = { id, owner: ownerId, conversation: chat._id, state: 'running', completion,
             stage: 'Preparing the reply', started: Date.now(), input, userMessage, controller };
         runs.set(id, run);
         active.set(activeKey, id);
@@ -226,6 +230,7 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         } catch (error) {
             active.delete(activeKey);
             runs.delete(id);
+            finishRun();
             throw error;
         }
         res.status(202).json({ run: id });
@@ -265,6 +270,7 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
             }
             run.finished = true;
             active.delete(activeKey);
+            finishRun();
             setTimeout(() => runs.delete(id), 10 * 60_000).unref();
         }
     }));
@@ -295,6 +301,12 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         }
         return res.status(503).json({ error: 'Atlas is temporarily unavailable.' });
     });
+    router.shutdown = async () => {
+        draining = true;
+        const pending = [...runs.values()].filter(run => !run.finished);
+        for (const run of pending) run.controller.abort(new AtlasError(503, 'Atlas is restarting. Your draft and available evidence are retained.'));
+        await Promise.allSettled(pending.map(run => run.completion));
+    };
     router.ownerPage = route(async (req, res) => {
         store.ready();
         await accounts.attach(req);

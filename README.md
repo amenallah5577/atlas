@@ -42,6 +42,8 @@ Warm ivory and graphite themes, teal accents, a custom EchoSphere mark, subtle b
 
 ## Getting started
 
+For hosting, see the [Render deployment guide](docs/deployment.md). The included Blueprint creates a separate Atlas service with persistent MongoDB storage and an Atlas homepage at `/`.
+
 **Requirements:** Node.js 20.19 or newer, npm, and a running MongoDB instance for the standard setup. CI runs on Node.js 22.
 
 ```powershell
@@ -159,7 +161,7 @@ npm run check
 npm run eval:check
 ```
 
-The current automated suite contains **96 tests** covering model routing, free quota handling, research review, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
+The current automated suite contains **102 tests** covering model routing, free quota handling, research review, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
 
 [GitHub Actions](https://github.com/amenallah5577/atlas/actions) runs installation, syntax checks, tests, and the evaluation dry run on pushes and pull requests. The [evaluation guide](eval/README.md) explains the fixed-source research benchmark. Fixture results do not establish live search accuracy or production readiness.
 

@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: echosphere-atlas
+    runtime: node
+    repo: https://github.com/amenallah5577/atlas
+    branch: main
+    region: frankfurt
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ATLAS_STANDALONE
+        value: "true"
+      - key: ATLAS_TRUST_PROXY
+        value: "1"
+      - key: ATLAS_STORAGE
+        value: mongodb
+      - key: ATLAS_LLM_PROVIDER
+        value: groq
+      - key: ATLAS_GROQ_QUICK_MODEL
+        value: openai/gpt-oss-20b
+      - key: ATLAS_GROQ_DETAILED_MODEL
+        value: openai/gpt-oss-120b
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: ATLAS_GROQ_API_KEY
+        sync: false
+      - key: ATLAS_TAVILY_API_KEY
+        sync: false
+      - key: ATLAS_FREE_PROVIDERS_CONFIRMED
+        sync: false
+      - key: ATLAS_OWNER_EMAIL
+        sync: false
+      - key: ATLAS_OWNER_ID
+        sync: false

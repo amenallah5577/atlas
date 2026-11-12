@@ -6,10 +6,10 @@
     <meta name="color-scheme" content="light dark">
     <title>Atlas · EchoSphere</title>
     <link rel="icon" type="image/svg+xml" href="/atlas-mark.svg?v=echo-4">
-    <link rel="stylesheet" href="/atlas.css?v=account-7">
-    <link rel="stylesheet" href="/atlas-account.css?v=account-7">
-    <script defer src="/atlas-account.js?v=account-7"></script>
-    <script defer src="/atlas.js?v=account-7"></script>
+    <link rel="stylesheet" href="/atlas.css?v=intelligence-8">
+    <link rel="stylesheet" href="/atlas-account.css?v=intelligence-8">
+    <script defer src="/atlas-account.js?v=intelligence-8"></script>
+    <script defer src="/atlas.js?v=intelligence-8"></script>
 </head>
 <body>
     <a class="skip" href="#message">Skip to message</a>
@@ -96,8 +96,8 @@
                         <fieldset class="depth-picker">
                             <legend class="sr-only">Research depth</legend>
                             <input id="depth" type="hidden" value="quick">
-                            <label title="Quick · A focused answer with fewer source checks"><input type="radio" name="research-depth" value="quick" checked><span data-icon="bolt" aria-hidden="true"></span><span>Quick</span></label>
-                            <label title="Detailed · More sources and a deeper comparison"><input type="radio" name="research-depth" value="detailed"><span data-icon="layers" aria-hidden="true"></span><span>Detailed</span></label>
+                            <label title="Quick · Faster model, concise answers, focused research"><input type="radio" name="research-depth" value="quick" checked><span data-icon="bolt" aria-hidden="true"></span><span>Quick</span></label>
+                            <label title="Detailed · Stronger reasoning, more context, multi-angle research and evidence review"><input type="radio" name="research-depth" value="detailed"><span data-icon="layers" aria-hidden="true"></span><span>Detailed</span></label>
                         </fieldset>
                     </div>
                     <button id="send" class="send" type="submit" aria-label="Send message" data-icon="arrow-up"></button>
@@ -106,6 +106,7 @@
                 <input id="file" type="file" accept=".pdf,application/pdf" hidden>
             </form>
             <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+            <p id="depth-description" class="mode-description" aria-live="polite">Quick · Faster answers and focused research.</p>
             <p class="composer-note">Atlas can make mistakes. Check sources for important decisions.</p>
         </div>
     </main>

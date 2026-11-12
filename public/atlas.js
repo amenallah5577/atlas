@@ -186,6 +186,7 @@ function updateLibraryControl(open) {
     control.title = label;
 }
 function renderComposer() {
+    updateDepthDescription();
     const busy = Boolean(state.run || state.submitting);
     $('message').readOnly = state.submitting;
     for (const control of document.querySelectorAll('#composer .shortcuts button, #composer input[name="research-depth"], #depth')) control.disabled = state.submitting;
@@ -415,6 +416,20 @@ function messageNode(message) {
     if (message.attachment) body.append(element('p', 'PDF · ' + message.attachment, 'attachment'));
     if (message.filters && Object.keys(message.filters).length) body.append(element('p', Object.values(message.filters).join(' · '), 'attachment'));
     renderReport(body, message);
+    if (!user && message.report?.depth) {
+        const report = message.report;
+        const method = element('details', null, 'answer-method');
+        const reviewed = report.verification?.status === 'reviewed';
+        method.append(element('summary', (report.depth === 'detailed' ? 'Detailed' : 'Quick') +
+            (reviewed ? ' · Evidence reviewed' : report.verification?.status === 'partial' ? ' · Review incomplete' : '')));
+        const models = [...new Set((report.usage?.models || []).map(item => item.provider + ' / ' + item.model))];
+        if (models.length) method.append(element('p', 'Models used: ' + models.join(', ')));
+        method.append(element('p', (report.usage?.calls || 0) + ' model call(s)' + (report.sources?.length ?
+            ' · ' + (report.usage?.searches || 0) + ' search(es) · ' + report.sources.length + ' saved source(s)' : '')));
+        if (report.verification?.note) method.append(element('p', report.verification.note));
+        if (report.usage?.truncated) method.append(element('p', 'The answer reached its length limit. Ask Atlas to continue if needed.'));
+        body.append(method);
+    }
     article.append(body);
     return article;
 }
@@ -1036,7 +1051,13 @@ for (const tab of document.querySelectorAll('[data-auth]')) {
 $('account-dialog').addEventListener('close', () => { $('account-mount').replaceChildren(); });
 window.addEventListener('storage', event => { if (event.key === 'atlas-account-change') initAccounts(); });
 window.addEventListener('focus', initAccounts);
-for (const radio of document.querySelectorAll('[name="research-depth"]')) radio.addEventListener('change', () => { $('depth').value = radio.value; });
+function updateDepthDescription() {
+    const note = $('depth-description');
+    if (note) note.textContent = $('depth').value === 'detailed' ?
+        'Detailed · Stronger reasoning, more context, and an extra evidence review for research.' :
+        'Quick · Faster answers and focused research.';
+}
+for (const radio of document.querySelectorAll('[name="research-depth"]')) radio.addEventListener('change', () => { $('depth').value = radio.value; updateDepthDescription(); });
 function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     $('theme').setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' theme');

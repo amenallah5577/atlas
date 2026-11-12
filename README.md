@@ -88,14 +88,16 @@ Atlas supports a local model or explicitly confirmed free-plan cloud providers. 
 Install [Ollama](https://docs.ollama.com/quickstart), download the default local model, and keep the Ollama service running:
 
 ```sh
-ollama pull llama3.2:latest
+ollama pull qwen3.5:4b
+ollama pull qwen3.5:9b
 ```
 
 If the service is not already running, start it in another terminal with `ollama serve`.
 
 ```dotenv
 ATLAS_LLM_PROVIDER=ollama
-ATLAS_OLLAMA_MODEL=llama3.2:latest
+ATLAS_OLLAMA_QUICK_MODEL=qwen3.5:4b
+ATLAS_OLLAMA_DETAILED_MODEL=qwen3.5:9b
 ```
 
 General chat and PDF analysis use the loopback Ollama API without a cloud model key. To run Atlas without MongoDB for personal development, also set:
@@ -118,15 +120,22 @@ ATLAS_TAVILY_API_KEY=your-free-tier-tavily-key
 ATLAS_FREE_PROVIDERS_CONFIRMED=true
 ```
 
-Atlas initially uses `openai/gpt-oss-120b` for Groq requests. Only set the confirmation flag after checking the provider accounts and billing settings. Keys do not disclose an account's billing plan to Atlas; provider-side limits and charges remain controlled by those accounts.
+Quick uses `openai/gpt-oss-20b` with low reasoning effort; Detailed uses `openai/gpt-oss-120b` with high reasoning effort. Detailed also retains more conversation context and allows a larger final answer. Only set the confirmation flag after checking the provider accounts and billing settings. Keys do not disclose an account's billing plan to Atlas; provider-side limits and charges remain controlled by those accounts.
 
 | Workflow | Search budget | Inspected pages | Model calls | Time budget |
 | --- | --- | --- | --- | --- |
-| Ordinary chat | None | None | 1 | 30 seconds |
+| Quick chat | None | None | 1 | 60 seconds |
+| Detailed chat | None | None | 1 | 120 seconds |
 | Quick research | 1 | Up to 5 | Up to 2 | 60 seconds |
 | Detailed research | 3 | Up to 8 | Up to 3 | 120 seconds |
 
-Retries and validation share the workflow budget. Reopening a saved chat does not make a model request. Research also uses application quotas and bounded concurrency; see [Atlas setup](docs/atlas.md) for the operating details.
+Quick research performs a focused search and a source-validated answer. Detailed research plans three complementary angles, synthesizes the evidence, and runs a separate review pass. If review cannot finish, the validated answer is retained with an incomplete-review label. Retries, repair, planning, and review share the workflow budget. Reopening a saved chat does not make a model request. Research also uses application quotas and bounded concurrency; see [Atlas setup](docs/atlas.md) for the operating details.
+
+### Optional OpenRouter free models
+
+Set `ATLAS_LLM_PROVIDER=openrouter`, `ATLAS_OPENROUTER_API_KEY`, and the free-account confirmation flag. The server accepts only explicit `:free` model IDs, verifies zero pricing against the current model catalogue, and sends a zero-price ceiling with provider fallbacks disabled. Defaults are Gemma 4 26B A4B for Quick and Nemotron 3 Ultra for Detailed; availability can change. See [.env.example](.env.example) for the server-only model settings.
+
+Run `npm run models:check` to verify the configured model IDs are available without sending an inference request. Model IDs and the mode used are recorded with each saved answer.
 
 ## Accounts and administration
 
@@ -150,7 +159,7 @@ npm run check
 npm run eval:check
 ```
 
-The current automated suite contains **80 tests** covering conversation routing, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
+The current automated suite contains **96 tests** covering model routing, free quota handling, research review, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
 
 [GitHub Actions](https://github.com/amenallah5577/atlas/actions) runs installation, syntax checks, tests, and the evaluation dry run on pushes and pull requests. The [evaluation guide](eval/README.md) explains the fixed-source research benchmark. Fixture results do not establish live search accuracy or production readiness.
 

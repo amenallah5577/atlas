@@ -132,6 +132,10 @@ h1 { font: 500 clamp(38px, 5vw, 62px)/1.1 Georgia, serif; letter-spacing: -.055e
 .composer-note, .feedback { text-align: center; font-size: 11px; color: var(--muted); margin: 6px auto; max-width: 816px; }
 .feedback:not(:empty) { color: var(--amber); font-size: 13px; }
 .feedback:empty { display: none; }
+.mode-description { color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; margin: 5px auto; max-width: 700px; }
+.answer-method { color: var(--muted); font-size: 11px; margin-top: 14px; }
+.answer-method summary { cursor: pointer; padding-block: 5px; width: fit-content; }
+.answer-method p { margin-top: 5px; overflow-wrap: anywhere; }
 .turn { margin: 18px 0 26px; overflow-wrap: anywhere; }
 .turn.user { margin-left: auto; width: fit-content; max-width: 84%; padding: 11px 15px; border-radius: 15px 15px 4px 15px; background: var(--tint); }
 .turn.assistant { display: flex; align-items: flex-start; gap: 12px; }

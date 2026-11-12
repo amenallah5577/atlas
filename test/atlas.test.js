@@ -301,7 +301,7 @@ test('local chat store persists across restarts and enforces ownership, locks, a
 
 test('local model adapter sends conversation to loopback without cloud credentials', async () => {
     const endpoints = [];
-    const clients = providerClients({ env: { ATLAS_LLM_PROVIDER: 'ollama' }, store: {}, request: async (url, options) => {
+    const clients = providerClients({ env: { ATLAS_LLM_PROVIDER: 'ollama', ATLAS_OLLAMA_MODEL: 'llama3.2:latest' }, store: {}, request: async (url, options) => {
         endpoints.push(url);
         if (url.endsWith('/tags')) return { ok: true, json: async () => ({ models: [{ name: 'llama3.2:latest' }] }) };
         const body = JSON.parse(options.body);

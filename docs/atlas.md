@@ -24,7 +24,8 @@ Atlas also supports installed Ollama models for personal use. Start `ollama serv
 
 ```dotenv
 ATLAS_LLM_PROVIDER=ollama
-ATLAS_OLLAMA_MODEL=llama3.2:latest
+ATLAS_OLLAMA_QUICK_MODEL=qwen3.5:4b
+ATLAS_OLLAMA_DETAILED_MODEL=qwen3.5:9b
 ATLAS_STORAGE=local
 SESSION_SECRET=your_stable_random_secret
 ```
@@ -84,3 +85,15 @@ Security lists active sessions using identifiers that cannot authenticate a requ
 Archiving removes a conversation from ordinary history while preserving its messages and sources. Restore it before continuing the conversation. Export includes the account's profile, preferences, and owned conversations, including archived chats. Storage totals count encoded conversation records (BSON in MongoDB, JSON locally), not infrastructure disk allocation. Bulk chat deletion and account deletion require typed confirmation and reject active replies. Account deletion also requires a password or a recent social login. Server mutation guards serialize deletion against other changes for that owner in the current Express process; run a single application process with the current in-memory research coordinator.
 
 Parental controls protect this account's web research, PDF uploads, and explicit-content filtering with a six-digit PIN. Enabling them first requires the password or a recent social login; later changes require the current PIN. These controls do not link separate parent and child accounts. The explicit-content filter conservatively blocks recognizable sexual or graphic-gore requests and matching replies; it is a limited text filter, not a comprehensive classification of every page or response. Research and upload restrictions are enforced before provider calls. Saved evidence can still answer follow-up questions while web research is disabled.
+
+## Intelligence profiles
+
+Quick and Detailed are server-owned workflows. Groq defaults to GPT-OSS 20B/low effort for Quick and GPT-OSS 120B/high effort for Detailed. Planning uses the smaller model. Ordinary chat uses one inference in either mode: Quick favors concise answers; Detailed checks assumptions, tradeoffs, edge cases, and constraints. The context builder preserves code formatting and includes saved listing fields, with up to 8 messages / 6,000 characters for Quick and 20 messages / 16,000 characters for Detailed.
+
+Quick research has one search and one synthesis, with its second allowed model call reserved for repair. Detailed research plans complementary searches, uses up to three searches/eight pages, synthesizes, and reviews supported claims in a third model call. Repairs consume the same budget and may replace the review. An incomplete review is labeled and retains the previously source-validated candidate. This is a model-assisted evidence review, not proof that every claim is true. PDF retrieval retains up to five relevant passages in Quick and twelve in Detailed. Each saved report keeps mode, model provenance, call/search usage, and review status.
+
+OpenRouter is optional: configure ATLAS_OPENROUTER_API_KEY and select ATLAS_LLM_PROVIDER=openrouter. Model IDs must end in :free and be listed at zero prices in the public catalogue; inference requests also enforce a zero prompt/completion price ceiling and disable provider fallbacks. There is no paid model fallback, cross-provider retry, or browser-supplied model override. Conservative OpenRouter caps are 40 calls/day and 10/minute; account/provider limits can be lower. Groq caps each model across all users at 27 requests/minute, 950/day, and conservatively estimated 7,500 tokens/minute and 190,000/day. Detailed can wait once for a local minute reservation within the run deadline, with cancellation available; provider failures are not automatically retried. Older chat context and the model's working evidence copy are shortened to fit the free limit, while saved evidence remains complete. Actual account limits can be lower, and provider backoff is honored.
+
+Local defaults are Qwen3.5 4B for Quick and 9B for Detailed. Install both with a compatible Ollama release. ATLAS_OLLAMA_QUICK_MODEL and ATLAS_OLLAMA_DETAILED_MODEL select explicit installed local models; the legacy ATLAS_OLLAMA_MODEL variable can still select one model for both profiles. Local thinking is enabled for Detailed plain chat on supported Qwen models; structured evidence extraction uses JSON without a thinking response. Cloud-backed Ollama models remain blocked. Models run one at a time on the local Ollama server to bound GPU memory use.
+
+Use npm run models:check to check credentials and model availability without inference. The script does not verify a cloud billing plan: operators must confirm their free provider accounts and billing settings. No provider key is included in this repository. Live Groq/OpenRouter quality and latency require configured keys and separate measurement.

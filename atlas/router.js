@@ -6,6 +6,7 @@ const { createStore } = require('./store');
 const { createAccounts } = require('./accounts');
 const { createAdministration } = require('./administration');
 const { enforceControls, explicitContent } = require('./account-controls');
+const { profileFor, conversationContext } = require('./model-router');
 const { AtlasError, LIMITS, clean, intent, canReuseEvidence, providerClients, research } = require('./research');
 
 const MODE = new Set(['auto', 'chat', 'jobs', 'marketplace', 'research', 'pdf']);
@@ -85,6 +86,8 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         next();
     });
     router.get('/profile', (req, res) => res.json({ mode: req.profile.mode, user: accounts.user(req) }));
+    router.get('/capabilities', (req, res) => res.json({ models: clients.describe?.() || { configured: false },
+        modes: Object.fromEntries(['quick', 'detailed'].map(depth => [depth, { ...LIMITS[depth], chatMs: profileFor(depth).chatMs }])) }));
     router.use((req, res, next) => {
         try { store.ready(); next(); } catch (error) { next(error); }
     });
@@ -204,7 +207,7 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
             await store.audit({ actor: ownerId, action: 'research.requested', target: chat._id,
                 note: input.text, createdAt: new Date().toISOString() });
         }
-        clients.ready(canReuseEvidence(input, prior, kind) ? 'chat' : kind);
+        clients.ready(canReuseEvidence(input, prior, kind) ? 'chat' : kind, input.depth);
         const id = randomUUID();
         if (active.size >= 2 || [...active.values()].some(value => runs.get(value)?.owner === ownerId)) {
             throw new AtlasError(429, 'Atlas is busy. Try again shortly.', 10);
@@ -228,10 +231,8 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         res.status(202).json({ run: id });
         let partialReport;
         const timer = setTimeout(() => controller.abort(new AtlasError(504, 'Atlas reached the research time limit.')),
-            kind === 'chat' ? 30_000 : LIMITS[input.depth].ms);
-        const context = chat.messages.slice(-8).map(message => ({
-            role: message.role, content: clean(message.text || message.report?.findings?.map(finding => finding.text).join(' '), 350)
-        })).filter(message => message.content);
+            kind === 'chat' ? profileFor(input.depth).chatMs : LIMITS[input.depth].ms);
+        const context = conversationContext(chat.messages, input.depth);
         try {
             const report = await research({ input, kind, prior, context, file: req.file, clients, signal: controller.signal,
                 stage: value => { run.stage = value; }, partial: value => { partialReport = value; } });

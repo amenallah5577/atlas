@@ -5,10 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/app.js",
+    "check": "node --check server.js && node --check public/app.js && node --check public/atlas.js && node --check atlas/router.js && node --check atlas/research.js && node --check atlas/model-router.js && node --check scripts/atlas-model-check.js",
     "test": "node --test",
     "eval:check": "node eval/run.js --dry-run",
-    "eval:run": "node eval/run.js"
+    "eval:run": "node eval/run.js",
+    "models:check": "node scripts/atlas-model-check.js"
   },
   "keywords": [
     "ai-agent",

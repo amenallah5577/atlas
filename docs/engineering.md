@@ -1,4 +1,6 @@
-# Reproducible setup and design decision
+# Historical engineering notes: EchoSphere foundation
+
+These notes describe the original EchoSphere implementation and its October 2026 verification. They are retained as project history. For current Atlas installation, routing, authentication, provider budgets, and test coverage, use the [repository README](../README.md) and [Atlas setup](atlas.md).
 
 Use Node.js 22, npm and MongoDB 8. From a clean checkout:
 

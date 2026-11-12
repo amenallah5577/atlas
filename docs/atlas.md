@@ -1,6 +1,6 @@
 # Atlas setup
 
-Atlas is served at `/atlas` and uses the same MongoDB connection as EchoSphere. On the deployment branch it uses EchoSphere's existing signed guest sessions and configured Clerk accounts. On the older local checkout it uses a separate signed guest cookie.
+Atlas is served at `/atlas` with its own `/api/atlas/*` endpoints and native email/password accounts. It uses the configured MongoDB connection by default, or explicitly selected local JSON storage for personal development. Native Atlas sessions override the inherited guest/account profile for Atlas requests; the original EchoSphere routes retain their existing behavior.
 
 Set the following server environment variables for Atlas. Put the provider keys in Render's environment settings or an ignored local `.env` file.
 
@@ -14,9 +14,9 @@ Set the following server environment variables for Atlas. Put the provider keys 
 
 Atlas reserves up to 900 basic Tavily searches per UTC calendar month and applies model request and token limits. Provider limits still apply to the entire provider account. The free-plan confirmation is an operator setting. A provider key does not identify the account's billing plan to Atlas.
 
-Run `npm ci`, then `npm start`. Open `http://localhost:3000/atlas`. Run `node --test test/atlas.test.js` for the Atlas fixture evaluation and HTTP workflow. On the deployment branch, `npm test` includes those checks with the existing EchoSphere suite.
+Run `npm ci`, then `npm start`. Open `http://localhost:3000/atlas`. Run `node --test test/atlas.test.js` for the Atlas fixture evaluation and HTTP workflow. `npm test` includes those checks together with the account, settings, and inherited EchoSphere tests.
 
-For a hosted smoke test, open Atlas in two guest sessions, send an ordinary message and one small research request, reopen the results, and verify the sessions see only their own history. Run the same check with Clerk when configured. Measure live extraction and citation quality with reviewed results before treating the fixture scores as production accuracy.
+For a hosted smoke test, open Atlas in two guest sessions, send an ordinary message and one small research request, reopen the results, and verify the sessions see only their own history. Run the same check with native Atlas accounts, then test each OAuth provider you have configured. Measure live extraction and citation quality with reviewed results before treating the fixture scores as production accuracy.
 
 ## Free local model
 
@@ -37,7 +37,7 @@ Ordinary chat and PDF analysis need no cloud model key in this mode. Web, job, a
 
 Atlas has its own email/password account system. Passwords use salted scrypt hashes. Opaque session tokens are stored as hashes in the database, expire automatically, and are revoked after logout, password changes, and account suspension. Production cookies require HTTPS.
 
-Configure MongoDB and a stable SESSION_SECRET before starting. For the local MongoDB instance used during implementation, the database is `mongodb://127.0.0.1:27028/atlas` in the existing `codex-echosphere-eval-mongo` Docker container. Its data volume persists across container restarts. Use a hosted MongoDB connection for public deployment.
+Configure MongoDB and a stable `SESSION_SECRET` before starting the standard setup. A local connection can use `mongodb://127.0.0.1:27017/atlas`; use the actual host and port of your MongoDB server. Back up the database or its persistent volume. Use a hosted MongoDB connection for public deployment, or select local storage only for personal development.
 
 Set `ATLAS_OWNER_EMAIL` to the owner's chosen email and run:
 
@@ -53,13 +53,13 @@ The owner dashboard can filter account histories, read complete saved conversati
 
 Registration requires acceptance of Terms and Conditions. Its final section explains owner review of saved conversations and retained activity records. Submitted account requests and owner actions are audited. Conversation deletion removes the saved conversation while activity records remain for moderation.
 
-The local installation uses Ollama and MongoDB. Public hosting needs its own MongoDB connection, HTTPS, stable session secret, owner ID, and confirmed free-plan Groq/Tavily keys. Email verification and email-based password recovery require a separate email delivery configuration. Password changes are available inside signed-in accounts.
+Atlas can run locally with Ollama and MongoDB, or with the explicit local-storage development option. Public hosting needs its own MongoDB connection, HTTPS, stable session secret, owner ID, and confirmed free-plan Groq/Tavily keys. Email verification and email-based password recovery require a separate email delivery configuration. Password changes are available inside signed-in accounts.
 
 ## Social sign-in
 
 Atlas supports Google (including Gmail), GitHub, and Microsoft through server-side authorization-code flows using `openid-client`. Requires Node 20.19 or newer. No authentication subscription is required. Provider app credentials must be created in the owner's provider developer accounts; unconfigured buttons stay disabled. Email/password sign-in remains available.
 
-Set `ATLAS_PUBLIC_URL` to the exact site origin (for example `https://ecosphere-hty6.onrender.com`, or `http://127.0.0.1:3182` locally). Production requires HTTPS. Register these exact callback URLs in the corresponding provider app, replacing the origin as needed:
+Set `ATLAS_PUBLIC_URL` to the exact site origin (for example `https://atlas.example.com`, or `http://127.0.0.1:3000` locally). Production requires HTTPS. Register these exact callback URLs in the corresponding provider app, replacing the origin as needed:
 
 | Provider | Callback path | Server environment variables |
 | --- | --- | --- |

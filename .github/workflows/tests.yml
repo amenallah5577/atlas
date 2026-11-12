@@ -1,4 +1,4 @@
-name: EchoSphere checks
+name: Atlas checks
 on: [push, pull_request]
 permissions:
   contents: read

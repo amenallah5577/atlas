@@ -1,0 +1,37 @@
+{
+  "name": "echosphere-atlas",
+  "version": "1.0.0",
+  "description": "EchoSphere Atlas: general chat, grounded research, PDFs, jobs, marketplace, and private account history.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js",
+    "test": "node --test",
+    "eval:check": "node eval/run.js --dry-run",
+    "eval:run": "node eval/run.js"
+  },
+  "keywords": [
+    "ai-agent",
+    "research",
+    "express",
+    "mongodb",
+    "groq"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@clerk/express": "^2.1.22",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-basic-auth": "^1.2.1",
+    "express-rate-limit": "^8.5.2",
+    "groq-sdk": "^0.3.3",
+    "mongoose": "^8.3.0",
+    "multer": "^2.1.1",
+    "openid-client": "^6.8.9",
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.35.5"
+  }
+}

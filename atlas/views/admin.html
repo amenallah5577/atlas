@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Atlas · Owner administration</title>
+    <link rel="icon" type="image/svg+xml" href="/atlas-mark.svg">
+    <link rel="stylesheet" href="/atlas-admin.css">
+    <script defer src="/atlas-admin.js"></script>
+</head>
+<body>
+    <a class="skip" href="#admin-content">Skip to administration</a>
+    <header class="site-header">
+        <a href="/atlas" class="brand"><img src="/atlas-mark.svg" alt="" width="32" height="32"><span>Atlas <small>Owner administration</small></span></a>
+        <div class="header-actions">
+            <a class="quiet" href="/atlas">Return to chat</a>
+            <button id="refresh" class="quiet" type="button">Refresh</button>
+            <button id="theme" class="quiet" type="button" aria-label="Switch color theme">Theme</button>
+        </div>
+    </header>
+    <main id="admin-content" class="admin-shell">
+        <section id="access-message" class="access-message" role="alert" hidden>
+            <h1>Owner access required</h1>
+            <p id="access-description">Sign in with the owner account to view this page.</p>
+            <a class="primary" href="/atlas">Open Atlas to sign in</a>
+        </section>
+        <div id="dashboard">
+            <div class="page-heading">
+                <div><p class="eyebrow">PRIVATE CONTROL PANEL</p><h1>Keep an eye on Atlas.</h1><p>Review account activity, manage access, and control the service.</p></div>
+                <span id="storage-label" class="badge">Connecting…</span>
+            </div>
+            <div id="feedback" role="status" aria-live="polite"></div>
+            <section class="overview" aria-label="Site overview">
+                <div><span>Accounts</span><strong id="user-count">—</strong></div>
+                <div><span>Saved conversations</span><strong id="conversation-count">—</strong></div>
+                <div><span>Access</span><strong class="small-value">Owner only</strong></div>
+            </section>
+            <nav class="tabs" aria-label="Administration sections">
+                <button type="button" data-section="conversations" aria-current="page">Conversations</button>
+                <button type="button" data-section="users">Accounts</button>
+                <button type="button" data-section="settings">Settings</button>
+                <button type="button" data-section="audit">Audit log</button>
+            </nav>
+            <section id="section-conversations" class="admin-section" aria-labelledby="conversations-title">
+                <div class="section-heading"><h2 id="conversations-title">Search and conversation history</h2><span class="hint">Account activity is disclosed during registration.</span></div>
+                <form id="conversation-search" class="filters">
+                    <label class="grow">Search titles<input id="conversation-query" type="search" maxlength="160" placeholder="Find a conversation"></label>
+                    <label>Account<select id="conversation-owner"><option value="">All accounts and guest sessions</option></select></label>
+                    <button class="primary" type="submit">Search</button>
+                </form>
+                <div id="conversations-status" class="list-status" role="status" aria-live="polite"></div>
+                <div id="conversations-list" class="conversation-list"></div>
+                <button id="conversations-more" class="quiet more" type="button" hidden>Load more conversations</button>
+            </section>
+            <section id="section-users" class="admin-section" aria-labelledby="users-title" hidden>
+                <div class="section-heading"><h2 id="users-title">Accounts</h2><span class="hint">Disabling an account blocks access and revokes its sessions.</span></div>
+                <form id="user-search" class="filters">
+                    <label class="grow">Find an account<input id="user-query" type="search" maxlength="160" placeholder="Email or name"></label>
+                    <button class="primary" type="submit">Search</button>
+                </form>
+                <div id="users-status" class="list-status" role="status" aria-live="polite"></div>
+                <div id="users-list" class="user-list"></div>
+                <button id="users-more" class="quiet more" type="button" hidden>Load more accounts</button>
+            </section>
+            <section id="section-settings" class="admin-section" aria-labelledby="settings-title" hidden>
+                <div class="section-heading"><h2 id="settings-title">Service settings</h2></div>
+                <form id="settings-form" class="settings-form">
+                    <label class="setting"><span><strong>Account registration</strong><small>Allow new visitors to create an account.</small></span><input id="registration-enabled" type="checkbox" role="switch"></label>
+                    <label class="setting"><span><strong>Live web research</strong><small>Allow web, job, and marketplace searches. Ordinary chat remains available.</small></span><input id="research-enabled" type="checkbox" role="switch"></label>
+                    <button class="primary" type="submit">Save settings</button>
+                </form>
+            </section>
+            <section id="section-audit" class="admin-section" aria-labelledby="audit-title" hidden>
+                <div class="section-heading"><h2 id="audit-title">Owner audit log</h2><button id="audit-refresh" class="quiet" type="button">Reload log</button></div>
+                <p class="hint">Account and administration actions are recorded for review.</p>
+                <div id="audit-status" class="list-status" role="status" aria-live="polite"></div>
+                <ol id="audit-list" class="audit-list"></ol>
+            </section>
+        </div>
+    </main>
+    <dialog id="conversation-dialog" class="detail-dialog" aria-labelledby="detail-title">
+        <div class="dialog-header"><h2 id="detail-title">Conversation</h2><button id="close-detail" class="icon-button" type="button" aria-label="Close conversation">×</button></div>
+        <p id="detail-meta" class="hint"></p>
+        <div id="detail-messages" class="detail-messages"></div>
+        <form id="review-form" class="review-form">
+            <label for="review-note">Private review note</label>
+            <textarea id="review-note" rows="3" maxlength="2000" placeholder="Record the review outcome or any follow-up needed."></textarea>
+            <div class="review-actions"><span id="review-feedback" role="status" aria-live="polite"></span><button class="primary" type="submit">Record review</button></div>
+        </form>
+    </dialog>
+</body>
+</html>

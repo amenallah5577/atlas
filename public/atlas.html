@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Atlas · EchoSphere</title>
+    <link rel="icon" type="image/svg+xml" href="/atlas-mark.svg?v=echo-4">
+    <link rel="stylesheet" href="/atlas.css?v=account-7">
+    <link rel="stylesheet" href="/atlas-account.css?v=account-7">
+    <script defer src="/atlas-account.js?v=account-7"></script>
+    <script defer src="/atlas.js?v=account-7"></script>
+</head>
+<body>
+    <a class="skip" href="#message">Skip to message</a>
+    <aside class="library" id="library" aria-label="Conversation history">
+        <div class="brand">
+            <button class="mark logo-home" type="button" data-home data-icon="echo" aria-label="Atlas home" title="Atlas home"></button>
+            <div><strong>Atlas</strong><span>BY ECHOSPHERE</span></div>
+            <button class="icon desktop-close" id="hide-library" type="button" aria-label="Hide conversation history" data-icon="chevron-left"></button>
+            <button class="icon mobile-close" id="close-library" type="button" aria-label="Close conversation history" data-icon="x"></button>
+        </div>
+        <button id="new-chat" class="new-chat" type="button">
+            <span class="new-chat-icon" data-icon="compose" aria-hidden="true"></span>
+            <span class="new-chat-label">New chat</span>
+            <span class="new-chat-plus" data-icon="plus" aria-hidden="true"></span>
+        </button>
+        <div class="history-search">
+            <span data-icon="search" aria-hidden="true"></span>
+            <input id="history-search" type="search" aria-label="Search conversation history" placeholder="Find a conversation…" autocomplete="off">
+            <button id="clear-history-search" class="icon" type="button" aria-label="Clear chat search" data-icon="x" hidden></button>
+        </div>
+        <h2 class="small-heading">YOUR CHATS</h2>
+        <p id="search-count" class="sr-only" role="status" aria-live="polite"></p>
+        <div id="history" class="history"></div>
+    </aside>
+    <button class="backdrop" id="backdrop" type="button" aria-label="Close conversation history" hidden></button>
+    <main>
+        <div class="ambient-background" aria-hidden="true">
+            <div class="ambient-glow ambient-glow-teal"></div>
+            <div class="ambient-glow ambient-glow-amber"></div>
+            <div class="ambient-particles">
+                <span style="--x:8%;--y:18%;--time:9s;--delay:-2s"></span>
+                <span style="--x:20%;--y:38%;--time:12s;--delay:-7s"></span>
+                <span style="--x:86%;--y:17%;--time:11s;--delay:-4s"></span>
+                <span style="--x:94%;--y:42%;--time:10s;--delay:-8s"></span>
+                <span style="--x:5%;--y:60%;--time:13s;--delay:-3s"></span>
+                <span style="--x:28%;--y:74%;--time:11s;--delay:-6s"></span>
+                <span style="--x:77%;--y:66%;--time:9s;--delay:-5s"></span>
+                <span style="--x:90%;--y:77%;--time:14s;--delay:-9s"></span>
+                <span style="--x:40%;--y:13%;--time:12s;--delay:-10s"></span>
+                <span style="--x:66%;--y:30%;--time:10s;--delay:-1s"></span>
+            </div>
+        </div>
+        <header class="topbar">
+            <div class="top-left">
+                <button class="icon menu" id="open-library" type="button" aria-label="Show conversation history" aria-controls="library" aria-expanded="true">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/></svg>
+                </button>
+                <button class="header-atlas-mark logo-home" type="button" data-home data-icon="echo" aria-label="Atlas home" title="Atlas home"></button>
+            </div>
+            <div class="top-actions">
+                <span id="identity">Guest</span>
+                <button class="quiet auth-button" id="signin" type="button"><span data-icon="login" aria-hidden="true"></span> Sign in</button>
+                <button class="primary auth-button" id="signup" type="button"><span data-icon="user-plus" aria-hidden="true"></span> Sign up</button>
+                <button class="quiet account-trigger" id="account" type="button" aria-label="Your account" hidden><span data-icon="user" aria-hidden="true"></span><span id="account-name">Account</span></button>
+                <a id="admin-link" class="quiet admin-link" href="/atlas/admin" hidden><span data-icon="shield" aria-hidden="true"></span> Admin</a>
+                <button class="icon" id="theme" type="button" aria-label="Switch color theme"><span data-icon="moon" aria-hidden="true"></span></button>
+                <button class="icon" id="chat-actions" type="button" aria-label="Conversation actions" data-icon="more" hidden></button>
+            </div>
+        </header>
+        <div class="viewport" id="viewport">
+            <div class="content">
+                <section class="welcome" id="welcome" aria-labelledby="welcome-title">
+                    <button class="welcome-mark logo-home" type="button" data-home data-icon="echo" aria-label="Atlas home" title="Atlas home"></button>
+                    <h1 id="welcome-title">What’s on your mind?</h1>
+                    <p>Ask a question, work through an idea, or find something worth a closer look.</p>
+                    <div class="examples" aria-label="Example prompts">
+                        <button type="button" data-example="Explain a topic"><span data-icon="sparkles" aria-hidden="true"></span><strong>Explain a topic</strong><small>Make a tricky idea easier to understand</small></button>
+                        <button type="button" data-example="jobs"><span data-icon="briefcase" aria-hidden="true"></span><strong>Explore jobs</strong><small>Find opportunities that fit your goals</small></button>
+                        <button type="button" data-example="marketplace"><span data-icon="shopping" aria-hidden="true"></span><strong>Compare products</strong><small>Research prices, specs, and trade-offs</small></button>
+                    </div>
+                </section>
+                <section id="transcript" aria-label="Conversation" hidden></section>
+            </div>
+        </div>
+        <div class="composer-area">
+            <form id="composer" class="composer">
+                <div id="draft-chips" class="draft-chips" hidden></div>
+                <textarea id="message" aria-label="Message Atlas" placeholder="Message Atlas…" rows="2" maxlength="2500"></textarea>
+                <div class="composer-tools">
+                    <div class="shortcuts">
+                        <button type="button" id="attach" class="tool"><span data-icon="paperclip" aria-hidden="true"></span> Attach PDF</button>
+                        <button type="button" class="tool" data-mode="jobs" aria-pressed="false"><span data-icon="briefcase" aria-hidden="true"></span> Jobs</button>
+                        <button type="button" class="tool" data-mode="marketplace" aria-pressed="false"><span data-icon="shopping" aria-hidden="true"></span> Marketplace</button>
+                        <fieldset class="depth-picker">
+                            <legend class="sr-only">Research depth</legend>
+                            <input id="depth" type="hidden" value="quick">
+                            <label title="Quick · A focused answer with fewer source checks"><input type="radio" name="research-depth" value="quick" checked><span data-icon="bolt" aria-hidden="true"></span><span>Quick</span></label>
+                            <label title="Detailed · More sources and a deeper comparison"><input type="radio" name="research-depth" value="detailed"><span data-icon="layers" aria-hidden="true"></span><span>Detailed</span></label>
+                        </fieldset>
+                    </div>
+                    <button id="send" class="send" type="submit" aria-label="Send message" data-icon="arrow-up"></button>
+                    <button id="stop" class="send" type="button" aria-label="Stop reply" data-icon="stop" hidden></button>
+                </div>
+                <input id="file" type="file" accept=".pdf,application/pdf" hidden>
+            </form>
+            <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+            <p class="composer-note">Atlas can make mistakes. Check sources for important decisions.</p>
+        </div>
+    </main>
+    <dialog id="filters-dialog" class="sheet">
+        <form id="filters-form">
+            <div class="dialog-heading"><h2 id="filters-title">Search filters</h2><button class="icon" type="button" data-close aria-label="Close filters" data-icon="x"></button></div>
+            <p class="dialog-note">Add the details that matter to you.</p>
+            <div id="filter-fields" class="filter-fields"></div>
+            <div class="dialog-actions"><button class="quiet" type="button" data-close><span data-icon="x" aria-hidden="true"></span> Cancel</button><button class="primary" type="submit"><span data-icon="check" aria-hidden="true"></span> Apply filters</button></div>
+        </form>
+    </dialog>
+    <dialog id="evidence-dialog" class="sheet drawer">
+        <div class="dialog-heading"><h2>Source evidence</h2><button class="icon" type="button" data-close aria-label="Close evidence" data-icon="x"></button></div>
+        <div id="evidence-content"></div>
+    </dialog>
+    <dialog id="comparison-dialog" class="sheet comparison">
+        <div class="dialog-heading"><h2>Compare results</h2><button class="icon" type="button" data-close aria-label="Close comparison" data-icon="x"></button></div>
+        <div id="comparison-content"></div>
+    </dialog>
+    <dialog id="actions-dialog" class="sheet">
+        <div class="dialog-heading"><h2>Conversation actions</h2><button class="icon" type="button" data-close aria-label="Close actions" data-icon="x"></button></div>
+        <div class="action-list">
+            <button class="quiet" type="button" id="export"><span data-icon="download" aria-hidden="true"></span> Download Markdown</button>
+            <button class="quiet" type="button" id="print"><span data-icon="printer" aria-hidden="true"></span> Print or save as PDF</button>
+            <button class="quiet" type="button" id="archive"><span data-icon="archive" aria-hidden="true"></span> Archive chat</button>
+            <button class="quiet danger" type="button" id="delete"><span data-icon="trash" aria-hidden="true"></span> Delete chat</button>
+        </div>
+    </dialog>
+    <dialog id="account-dialog" class="sheet">
+        <div class="dialog-heading"><h2 id="account-title">Sign in to Atlas</h2><button class="icon" type="button" data-close aria-label="Close account dialog" data-icon="x"></button></div>
+        <div class="auth-switch" aria-label="Account access"><button class="quiet" type="button" data-auth="signin">Sign in</button><button class="quiet" type="button" data-auth="signup">Sign up</button></div>
+        <div id="account-mount"></div>
+    </dialog>
+</body>
+</html>

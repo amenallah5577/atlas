@@ -1,0 +1,350 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+const Groq = require('groq-sdk');
+const mongoose = require('mongoose');
+const basicAuth = require('express-basic-auth');
+const { clerkMiddleware, getAuth } = require('@clerk/express');
+const multer = require('multer');
+const { extractPdfText } = require('./lib/pdf');
+const rateLimit = require('express-rate-limit');
+const { getOrCreateGuestSession } = require('./lib/session');
+
+const app = express();
+app.use(cors());
+app.use('/api/atlas/account/profile', express.json({ limit: '3mb' }));
+app.use(express.json());
+
+const clerkEnabled = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
+if (clerkEnabled) {
+    app.use(clerkMiddleware({
+        publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+        secretKey: process.env.CLERK_SECRET_KEY
+    }));
+}
+
+const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) {
+    console.warn('SESSION_SECRET is not configured. Guest sessions will reset when the server restarts.');
+}
+
+function profileMiddleware(req, res, next) {
+    if (clerkEnabled) {
+        const auth = getAuth(req);
+        if (auth.isAuthenticated && auth.userId) {
+            req.profile = { mode: 'account', ownerId: `user:${auth.userId}` };
+            return next();
+        }
+    }
+
+    const guestId = getOrCreateGuestSession(req, res, sessionSecret, {
+        secure: process.env.NODE_ENV === 'production'
+    });
+    req.profile = { mode: 'guest', ownerId: `guest:${guestId}` };
+    next();
+}
+
+// Memory-only storage — no files are written to disk
+const MAX_PDF_SIZE = 5 * 1024 * 1024;
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_PDF_SIZE },
+    fileFilter: (req, file, callback) => {
+        if (file.mimetype !== 'application/pdf') {
+            return callback(new Error('Only PDF documents can be analyzed.'));
+        }
+        callback(null, true);
+    }
+});
+
+// --- SECURITY LOCK ---
+const adminCredentialsConfigured = Boolean(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD);
+const adminLock = adminCredentialsConfigured
+    ? basicAuth({
+        users: { [process.env.ADMIN_USERNAME]: process.env.ADMIN_PASSWORD },
+        challenge: true,
+        realm: 'Secure Admin Area'
+    })
+    : (req, res) => res.status(404).send('Not found');
+
+// Protect the HTML page
+app.get('/admin.html', adminLock, (req, res) => {
+    res.sendFile(__dirname + '/public/admin.html');
+});
+
+app.get('/api/config', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        clerkEnabled,
+        clerkPublishableKey: clerkEnabled ? process.env.CLERK_PUBLISHABLE_KEY : null
+    });
+});
+
+app.get('/api/profile', profileMiddleware, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ mode: req.profile.mode });
+});
+
+app.get('/atlas', (req, res) => res.sendFile(__dirname + '/public/atlas.html'));
+const atlasRouter = require('./atlas/router').createAtlasRouter({ profileMiddleware });
+app.use('/api/atlas', atlasRouter);
+app.get(['/atlas/admin', '/atlas-admin.html'], atlasRouter.ownerPage, (error, req, res, next) => {
+    if (res.headersSent) return next(error);
+    res.status(error.status || 503).set('Cache-Control', 'no-store')
+        .send('<!doctype html><meta charset="utf-8"><title>Atlas owner access</title><h1>Owner access required</h1><p>Sign in with the site owner account to open administration.</p><a href="/atlas">Return to Atlas</a>');
+});
+app.get('/atlas/terms', (req, res) => res.sendFile(__dirname + '/public/atlas-terms.html'));
+
+// Serve all other public files normally
+app.use(express.static('public'));
+
+// Connect to MongoDB
+if (require.main === module && process.env.MONGODB_URI) mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ Connected to MongoDB!'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// Define Database Schema
+const HistorySchema = new mongoose.Schema({
+    ownerId: { type: String, index: true },
+    prompt: String,
+    title: String,
+    url: String,
+    date: { type: Date, default: Date.now }
+});
+const History = mongoose.model('History', HistorySchema);
+const historyLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+});
+const dispatchLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many research requests. Please try again in a few minutes.' }
+});
+
+const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
+
+async function scrapeUrl(url) {
+    try {
+        // Validate URL to prevent SSRF: only allow http/https and block private IP ranges
+        let parsed;
+        try {
+            parsed = new URL(url);
+        } catch {
+            return null;
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+        // Block requests to private/loopback addresses
+        const hostname = parsed.hostname.toLowerCase();
+        if (
+            hostname === 'localhost' ||
+            /^127\./.test(hostname) ||
+            /^10\./.test(hostname) ||
+            /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+            /^192\.168\./.test(hostname) ||
+            hostname === '0.0.0.0' ||
+            hostname === '::1'
+        ) {
+            return null;
+        }
+
+        const response = await fetch(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EchoSphereBot/1.0)' },
+            signal: AbortSignal.timeout(8000)
+        });
+        if (!response.ok) return null;
+        // Guard against excessively large responses (limit to 2 MB)
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength, 10) > 2 * 1024 * 1024) return null;
+        const html = await response.text();
+        // Strip HTML tags, scripts, styles and collapse whitespace
+        const text = html
+            .replace(/<script[\s\S]*?<\/script[^>]*>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style[^>]*>/gi, ' ')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+        // Return at most 3000 characters to keep context manageable
+        return text.slice(0, 3000);
+    } catch {
+        return null;
+    }
+}
+
+async function searchWebForAgent(query) {
+    const response = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            api_key: process.env.TAVILY_API_KEY,
+            query: query,
+            search_depth: "advanced",
+            include_answer: true,
+            max_results: 3
+        }),
+        signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) throw new Error(`Search provider returned HTTP ${response.status}`);
+    const data = await response.json();
+    if (!Array.isArray(data.results)) throw new Error('Search provider returned invalid results');
+
+    // Deep scrape the top 2 result URLs for richer context
+    if (Array.isArray(data.results)) {
+        const topResults = data.results.slice(0, 2);
+        const scrapeResults = await Promise.allSettled(topResults.map(async (result) => {
+            if (result.url) {
+                const deepText = await scrapeUrl(result.url);
+                if (deepText) {
+                    result.deepContent = deepText;
+                }
+            }
+        }));
+        scrapeResults.forEach((outcome, i) => {
+            if (outcome.status === 'rejected') {
+                console.error(`Scrape failed for result ${i}:`, outcome.reason);
+            }
+        });
+    }
+
+    return data;
+}
+
+app.post('/api/dispatch', dispatchLimiter, profileMiddleware, upload.single('file'), async (req, res) => {
+    try {
+        const task = typeof req.body.task === 'string' ? req.body.task.trim() : '';
+        if (task.length < 3 || task.length > 1000) {
+            return res.status(400).json({ error: 'Research questions must contain between 3 and 1000 characters.' });
+        }
+        if (!groq || !process.env.GROQ_MODEL || !process.env.TAVILY_API_KEY) {
+            return res.status(503).json({ error: 'Research is temporarily unavailable. The server needs configured search and model providers.' });
+        }
+        // history may arrive as a JSON string (from FormData) or as an array (from JSON body)
+        let history = req.body.history;
+        if (typeof history === 'string') {
+            try { history = JSON.parse(history); } catch { history = []; }
+        }
+
+        const searchResults = await searchWebForAgent(task);
+        let liveContext = searchResults.results.map(r => {
+            let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`;
+            if (r.deepContent) entry += `\nFull Page Text: ${r.deepContent}`;
+            return entry;
+        }).join('\n\n');
+
+        // If a PDF was uploaded, parse it and append the extracted text to the context
+        if (req.file && req.file.mimetype === 'application/pdf') {
+            try {
+                const pdfText = await extractPdfText(req.file.buffer);
+                liveContext += `\n\n--- Uploaded PDF: ${req.file.originalname} ---\n${pdfText}`;
+            } catch (pdfErr) {
+                return res.status(400).json({ error: 'The PDF could not be read. Upload a valid text-based PDF.' });
+            }
+        }
+
+        // Build the messages array: system prompt + conversation history + current task
+        // Cap to last 20 messages (10 pairs) on the server side to prevent token overflow
+        const MAX_HISTORY = 20;
+        const conversationHistory = Array.isArray(history) ? history
+            .filter(message => message && ['user', 'assistant'].includes(message.role) && typeof message.content === 'string')
+            .slice(-MAX_HISTORY).map(message => ({ role: message.role, content: message.content.slice(0, 4000) })) : [];
+
+        const messages = [
+            {
+                role: "system",
+                content: `You are a Senior Research Analyst at EchoSphere, an enterprise intelligence platform. You have just retrieved the following live data from the internet, including deep-scraped full-page text for the top results. Your task is to produce a deep, professional, multi-paragraph analysis report.
+
+Live Data:
+${liveContext}
+
+INSTRUCTIONS: Before writing your final answer, use the "scratchpad" field to think out loud. In the scratchpad, compare the sources, identify any contradictions, note key statistics, and plan the structure of your response. This internal reasoning will NOT be shown to the user.
+
+Respond ONLY in valid JSON using this exact schema:
+{
+  "scratchpad": "Your internal chain-of-thought reasoning: compare sources, identify key data points, note any contradictions, and plan your response. This field is hidden from the user.",
+  "icon": "A single relevant emoji that represents the topic",
+  "title": "A concise, professional title of no more than 10 words",
+  "desc": "Write a detailed analysis of 2 to 3 paragraphs separated by \\n\\n. Paragraph 1: Summarize the key findings, background context, and the most important facts from the live data. Paragraph 2: Analyze the implications, notable trends, specific statistics, or data points found in the sources. Paragraph 3 (optional): Provide actionable insights, recommendations, or a forward-looking conclusion. Each paragraph should be 3 to 5 sentences long.",
+  "metrics": ["Specific data point 1 such as a dollar figure", "Specific data point 2 such as a percentage change", "Specific data point 3 such as a date or timeframe", "Specific data point 4 such as a count or ranking"],
+  "primaryAction": "A descriptive label for the primary source link",
+  "secondaryAction": "Dismiss",
+  "realUrl": "The exact URL of the most relevant source from the live data"
+}`
+            },
+            ...conversationHistory,
+            { role: "user", content: task }
+        ];
+
+        const completion = await groq.chat.completions.create({
+            model: process.env.GROQ_MODEL,
+            messages,
+            temperature: 0.3,
+            response_format: { type: "json_object" }
+        });
+
+        const agentResponse = JSON.parse(completion.choices[0].message.content);
+        if (!agentResponse || typeof agentResponse.title !== 'string' || !agentResponse.title.trim()
+            || typeof agentResponse.desc !== 'string' || !agentResponse.desc.trim()) throw new Error('Model returned an incomplete report');
+
+        // Remove the internal scratchpad field — it is for Chain of Thought only and must not be sent to the client
+        delete agentResponse.scratchpad;
+
+        // Save to Database
+        try {
+            const newHistory = new History({
+                ownerId: req.profile.ownerId,
+                prompt: task,
+                title: agentResponse.title,
+                url: agentResponse.realUrl
+            });
+            await newHistory.save();
+        } catch (dbErr) {
+            console.error("Could not save history:", dbErr);
+        }
+
+        res.json(agentResponse);
+
+    } catch (error) {
+        console.error("Agent Error:", error);
+        res.status(500).json({ error: "Agent node failed." });
+    }
+});
+
+app.get('/api/history', historyLimiter, profileMiddleware, async (req, res) => {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'History is temporarily unavailable.' });
+    try {
+        const history = await History.find({ ownerId: req.profile.ownerId }).sort({ date: -1 }).limit(50);
+        res.set('Cache-Control', 'no-store');
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch history" });
+    }
+});
+
+app.get('/api/admin/history', adminLock, async (req, res) => {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'History is temporarily unavailable.' });
+    try {
+        const history = await History.find({}).sort({ date: -1 }).limit(100);
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch admin history" });
+    }
+});
+
+app.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'PDF files must be 5 MB or smaller.' });
+    }
+    if (error) {
+        return res.status(400).json({ error: error.message || 'The upload could not be processed.' });
+    }
+    next();
+});
+
+const PORT = process.env.PORT || 3000;
+if (require.main === module) app.listen(PORT, () => console.log(`🚀 EchoSphere running on port ${PORT}`));
+module.exports = app;

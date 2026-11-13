@@ -101,7 +101,7 @@ function createProviders(env, request = fetch) {
             }
             if (typeof subject !== 'string' || !subject || subject.length > 255) throw new Error('Provider subject unavailable');
             return { subject, email: typeof email === 'string' ? email.trim().toLowerCase() : '',
-                name: typeof name === 'string' ? name.trim().slice(0, 80) : '' };
+                name: typeof name === 'string' ? name.trim().slice(0, 80) : '', emailVerified: Boolean(email && id !== 'microsoft') };
         }
     };
 }

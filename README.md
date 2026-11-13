@@ -34,7 +34,7 @@ Warm ivory and graphite themes, teal accents, a custom EchoSphere mark, subtle b
 
 ### Accounts that keep your context
 
-- Email/password registration and login, editable display names, and profile photos.
+- Email/password registration with inbox verification codes, login, editable display names, and profile photos.
 - Google, GitHub, and Microsoft sign-in integrations, enabled when their credentials are configured.
 - Active-session management, password changes, account export, and account deletion.
 - General, Appearance, Notifications, Profile, Security and login, Account, Archived chats, Parental controls, Safety & wellbeing, Storage, and Data controls.
@@ -141,7 +141,7 @@ Run `npm run models:check` to verify the configured model IDs are available with
 
 ## Accounts and administration
 
-Email/password signup works once Atlas storage is available. Users accept the [Terms and Conditions](public/atlas-terms.html), whose final section explains owner moderation and retained activity logs.
+Email/password signup requires storage and a configured, verified Brevo sender on the Free plan. Atlas sends a six-digit code and creates the account only after the code is confirmed in the requesting browser. Codes expire after ten minutes, allow five guesses, and can be resent after sixty seconds. Format and mail-domain checks reject invalid addresses; receiving and entering the code proves control of the inbox. Users accept the [Terms and Conditions](public/atlas-terms.html), whose final section explains owner moderation and retained activity logs.
 
 To provision the owner, set `ATLAS_OWNER_EMAIL` in `.env`, then run:
 
@@ -161,7 +161,7 @@ npm run check
 npm run eval:check
 ```
 
-The current automated suite contains **106 tests** covering model routing, free quota handling, research review, passage relevance, bounded evidence repair, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
+The current automated suite contains **116 tests** covering model routing, free quota handling, research review, passage relevance, bounded evidence repair, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
 
 [GitHub Actions](https://github.com/amenallah5577/atlas/actions) runs installation, syntax checks, tests, and the evaluation dry run on pushes and pull requests. The [evaluation guide](eval/README.md) explains the fixed-source research benchmark. Fixture results do not establish live search accuracy or production readiness.
 
@@ -172,7 +172,7 @@ The current automated suite contains **106 tests** covering model routing, free 
 - Use one Express process with the current in-memory research coordinator and cancellation state.
 - PDFs are processed in memory; saved answers retain relevant excerpts. Scanned PDFs need OCR before they can be meaningfully analyzed.
 - Parental controls protect this account's browsing and upload settings with a PIN. The explicit-content text filter is limited, and separate parent/child account linking is not implemented.
-- Browser notifications require permission and an open Atlas tab. Email verification and email-based password recovery require additional email-service integration.
+- Browser notifications require permission and an open Atlas tab. Email-based password recovery requires an additional recovery flow.
 - Atlas can make mistakes. Check the supporting sources and original listings before relying on an answer.
 
 ## Documentation

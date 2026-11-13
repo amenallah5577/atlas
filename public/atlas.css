@@ -393,6 +393,10 @@ button > .glyph, a > .glyph, h2 > .glyph, label > .glyph, button > [data-icon] {
 }
 
 .auth-providers { margin-top: 14px; }
+.verification-description { margin-top: 16px; overflow-wrap: anywhere; line-height: 1.6; }
+.verification-code { font-size: 24px; letter-spacing: .3em; font-variant-numeric: tabular-nums; text-align: center; }
+.verification-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.verification-actions button { min-height: 42px; }
 .provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .provider-button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 46px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); text-align: left; font-size: 12px; font-weight: 600; line-height: 1.4; }
 .provider-button:hover:not(:disabled) { border-color: var(--teal); background: var(--tint); }

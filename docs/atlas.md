@@ -56,6 +56,16 @@ Registration requires acceptance of Terms and Conditions. Its final section expl
 
 Atlas can run locally with Ollama and MongoDB, or with the explicit local-storage development option. Public hosting needs its own MongoDB connection, HTTPS, stable session secret, owner ID, and confirmed free-plan Groq/Tavily keys. Email verification and email-based password recovery require a separate email delivery configuration. Password changes are available inside signed-in accounts.
 
+## Email verification
+
+Configure `ATLAS_EMAIL_PROVIDER=brevo`, `ATLAS_EMAIL_FROM`, `ATLAS_BREVO_API_KEY`, and `ATLAS_EMAIL_FREE_PLAN_CONFIRMED=true` after verifying a sender and checking the account is on Brevo Free. Atlas checks the provider's plan and sender status before sending through the HTTPS API. Provider keys stay on the server. The application caps verification mail at 260 requests per UTC day and ten per address, with no paid fallback.
+
+`POST /api/atlas/auth/register` now returns `202` with an opaque verification ID and a browser-bound HttpOnly cookie. No account or authenticated session exists yet. `POST /api/atlas/auth/verification/confirm` accepts `{verificationId, code}` and creates the verified account only after proof of inbox access. Codes last ten minutes and allow five guesses; `POST /api/atlas/auth/verification/resend` rotates the code and ID after a sixty-second cooldown. `GET /api/atlas/auth/verification` restores the pending step after reload. MongoDB stores only a keyed code hash and temporary password hash, with an expiry index and atomic one-use consumption.
+
+Existing password accounts without a verification timestamp keep their records and history. Their next password login returns the same code step before issuing a new session. A later password change, suspension, or deletion invalidates the pending login. Google and GitHub verified-email claims are recorded as verified; a Microsoft profile address is not treated as independent proof of inbox ownership.
+
+DNS checks reject invalid/non-mail domains, but do not prove a particular mailbox exists. Only successful inbox-code confirmation provides that proof. Delivery failures and exhausted free quotas never create an active account. Email-based password recovery is not implemented by this signup verification feature.
+
 ## Social sign-in
 
 Atlas supports Google (including Gmail), GitHub, and Microsoft through server-side authorization-code flows using `openid-client`. Requires Node 20.19 or newer. No authentication subscription is required. Provider app credentials must be created in the owner's provider developer accounts; unconfigured buttons stay disabled. Email/password sign-in remains available.

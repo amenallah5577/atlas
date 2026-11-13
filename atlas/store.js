@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { randomUUID } = require('node:crypto');
 const { AtlasError } = require('./research');
 const { identity, identities, oauthAttempt, validateAttemptLookup } = require('./oauth-identity');
+const verificationStore = require('./email-verification-store').mongoVerificationStore(mongoose);
 
 const conversationSchema = new mongoose.Schema({
     _id: String, owner: { type: String, required: true }, title: String,
@@ -21,6 +22,7 @@ const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     name: String,
     passwordHash: String,
+    emailVerifiedAt: Date,
     avatarUrl: String,
     preferences: mongoose.Schema.Types.Mixed,
     parental: mongoose.Schema.Types.Mixed,
@@ -108,6 +110,7 @@ function createStore(env = process.env) {
         return require('./local-store').createLocalStore(env.ATLAS_DATA_FILE || '.atlas-data/store.json');
     }
     return {
+        ...verificationStore,
         ready() {
             if (mongoose.connection.readyState !== 1) throw new AtlasError(503, 'Atlas history is unavailable. Check the database connection.');
         },
@@ -171,7 +174,7 @@ function createStore(env = process.env) {
                     _id: user._id, email: String(user.email).trim().toLowerCase(), name: user.name,
                     passwordHash: user.passwordHash, disabled: false, createdAt: user.createdAt || new Date(),
                     authVersion: Number.isSafeInteger(user.authVersion) && user.authVersion >= 0 ? user.authVersion : 0,
-                    lastLoginAt: user.lastLoginAt, termsAcceptedAt: user.termsAcceptedAt, termsVersion: user.termsVersion
+                    lastLoginAt: user.lastLoginAt, emailVerifiedAt: user.emailVerifiedAt, termsAcceptedAt: user.termsAcceptedAt, termsVersion: user.termsVersion
                 };
                 if (linked.length) record.identities = linked;
                 return (await User.create(record)).toObject();
@@ -185,6 +188,11 @@ function createStore(env = process.env) {
         },
         userById(id) {
             return User.findById(id).lean();
+        },
+        verifyUserEmail(id, email, authVersion, at) {
+            return User.findOneAndUpdate({ _id: id, email, disabled: { $ne: true },
+                ...(authVersion === 0 ? { $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] } : { authVersion }) },
+            { $set: { emailVerifiedAt: at, lastLoginAt: at } }, { new: true }).lean();
         },
         userByIdentity(provider, subject) {
             return User.findOne({ 'identities.key': identity(provider, subject).key }).lean();
@@ -304,6 +312,7 @@ function createStore(env = process.env) {
             if (!user) return false;
             await Session.deleteMany({ userId });
             await OAuthAttempt.deleteMany({ userId });
+            await mongoose.models.AtlasEmailVerification.deleteMany({ $or: [{ userId }, { email: user.email }] });
             await Conversation.deleteMany({ owner });
             return true;
         },

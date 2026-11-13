@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const { createLocalStore } = require('../atlas/local-store');
 const { createAtlasRouter } = require('../atlas/router');
 const { hashPassword } = require('../atlas/accounts');
+const { emailFixture } = require('../test-support/email');
 const { preferences, parental, preferencePatch } = require('../atlas/account-preferences');
 
 const password = 'settings-fixture-password-4862';
@@ -16,10 +17,11 @@ async function fixture(t) {
     const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'atlas-settings-'));
     t.after(() => fs.rm(folder, { recursive: true, force: true }));
     const store = createLocalStore(path.join(folder, 'store.json'));
+    const emailDelivery = emailFixture();
     const ownerId = randomUUID();
     const app = express();
     app.use(express.json({ limit: '3mb' }));
-    app.use('/api/atlas', createAtlasRouter({ store,
+    app.use('/api/atlas', createAtlasRouter({ store, emailDelivery,
         env: { SESSION_SECRET: 'settings-fixture-secret', ATLAS_OWNER_ID: ownerId, ATLAS_OWNER_EMAIL: 'owner@example.test' },
         clients: { ready() {}, async complete() { return { content: 'A test reply.', tokens: 4 }; } } }));
     const server = app.listen(0, '127.0.0.1');
@@ -41,7 +43,9 @@ async function fixture(t) {
     }
     async function register(email = randomUUID() + '@example.test') {
         const request = client();
-        const result = await request('/auth/register', { email, password, acceptTerms: true });
+        const start = await request('/auth/register', { email, password, acceptTerms: true });
+        assert.equal(start.status, 202);
+        const result = await request('/auth/verification/confirm', { verificationId: start.data.verification.id, code: emailDelivery.sent.get(email).code });
         assert.equal(result.status, 201);
         return { request, user: result.data.user, email };
     }
@@ -189,7 +193,7 @@ test('account deletion needs confirmation and authentication, protects the owner
     await f.store.lock(firstOwner, chat.id, run);
     assert.equal((await first.request('/account', { confirmation: 'DELETE', currentPassword: password }, 'DELETE')).status, 409);
     await f.store.finish(firstOwner, chat.id, run, 'Chat', []);
-    await f.store.createUser({ _id: f.ownerId, email: 'owner@example.test', name: 'Owner', passwordHash: await hashPassword(password) });
+    await f.store.createUser({ _id: f.ownerId, email: 'owner@example.test', name: 'Owner', passwordHash: await hashPassword(password), emailVerifiedAt: new Date().toISOString() });
     const owner = f.client();
     await owner('/auth/login', { email: 'owner@example.test', password });
     assert.equal((await owner('/account', { confirmation: 'DELETE', currentPassword: password }, 'DELETE')).status, 403);

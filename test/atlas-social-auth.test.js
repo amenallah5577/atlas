@@ -83,7 +83,7 @@ async function fixture(t) {
     }
     async function native(email, options = {}) {
         return store.createUser({ _id: options.id || randomUUID(), email, name: 'Fixture account',
-            passwordHash: await hashPassword(password), createdAt: new Date().toISOString(), ...options });
+            passwordHash: await hashPassword(password), emailVerifiedAt: new Date().toISOString(), createdAt: new Date().toISOString(), ...options });
     }
     return { store, ownerId, client, start, callback, native, codes, pending, authProviders, exchanges: () => exchanges };
 }

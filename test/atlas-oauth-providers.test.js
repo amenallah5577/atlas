@@ -62,7 +62,8 @@ for (const id of ['google', 'github', 'microsoft']) {
         const result = await providers.identity(id, { state, codeVerifier: verifier, query: 'code=fixture-code&state=' + state });
         assert.equal(result.email, 'person@example.test');
         assert.equal(result.name, 'Person');
-        assert.deepEqual(Object.keys(result).sort(), ['email', 'name', 'subject']);
+        assert.deepEqual(Object.keys(result).sort(), ['email', 'emailVerified', 'name', 'subject']);
+        assert.equal(result.emailVerified, id !== 'microsoft');
         const body = new URLSearchParams(requests[0].init.body);
         assert.equal(body.get('code_verifier'), verifier);
         assert.equal(body.get('client_secret'), 'fixture-secret');

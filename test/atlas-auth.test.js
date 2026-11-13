@@ -7,18 +7,20 @@ const { createLocalStore } = require('../atlas/local-store');
 const { createAtlasRouter } = require('../atlas/router');
 const { hashPassword } = require('../atlas/accounts');
 const express = require('express');
+const { emailFixture } = require('../test-support/email');
 
 test('real accounts isolate history and restrict moderation to the configured owner', async t => {
     const folder = await fs.mkdtemp(path.join(require('node:os').tmpdir(), 'atlas-auth-'));
     t.after(() => fs.rm(folder, { recursive: true, force: true }));
     const store = createLocalStore(path.join(folder, 'accounts.json'));
+    const emailDelivery = emailFixture();
     const ownerId = randomUUID();
     const password = 'a-long-test-password-42';
     await store.createUser({ _id: ownerId, email: 'owner@example.test', name: 'Owner',
-        passwordHash: await hashPassword(password), createdAt: new Date().toISOString() });
+        passwordHash: await hashPassword(password), emailVerifiedAt: new Date().toISOString(), createdAt: new Date().toISOString() });
     const app = express();
     app.use(express.json());
-    app.use('/api/atlas', createAtlasRouter({ store,
+    app.use('/api/atlas', createAtlasRouter({ store, emailDelivery,
         env: { SESSION_SECRET: 'fixture-session-secret', ATLAS_OWNER_ID: ownerId, ATLAS_OWNER_EMAIL: 'owner@example.test' },
         clients: { ready() {}, async complete() { return { content: 'A test reply.', tokens: 4 }; } } }));
     const server = app.listen(0, '127.0.0.1');
@@ -27,7 +29,7 @@ test('real accounts isolate history and restrict moderation to the configured ow
     const base = 'http://127.0.0.1:' + server.address().port + '/api/atlas';
     function client() {
         const cookies = new Map();
-        return async (url, body, method, origin) => {
+        return async function call(url, body, method, origin) {
             const response = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'),
                 headers: { 'Content-Type': 'application/json', Cookie: [...cookies].map(([key, value]) => key + '=' + value).join('; '),
                     ...(origin ? { Origin: origin } : {}) },
@@ -36,7 +38,11 @@ test('real accounts isolate history and restrict moderation to the configured ow
                 const [key, ...value] = cookie.split(';')[0].split('=');
                 cookies.set(key, value.join('='));
             }
-            return { status: response.status, data: await response.json().catch(() => null) };
+            const data = await response.json().catch(() => null);
+            if (response.status === 202 && data?.verification) {
+                return call('/auth/verification/confirm', { verificationId: data.verification.id, code: emailDelivery.sent.get(data.verification.email).code });
+            }
+            return { status: response.status, data };
         };
     }
     const visitor = client(), regular = client(), owner = client(), other = client();

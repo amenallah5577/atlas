@@ -78,6 +78,7 @@ function createSocialAuth({ store, env, issue, current, verifyPassword, password
                 const now = new Date().toISOString();
                 try {
                     user = await store.createUser({ _id: crypto.randomUUID(), email, name: identity.name, createdAt: now, lastLoginAt: now,
+                        ...(identity.emailVerified === true ? { emailVerifiedAt: now } : {}),
                         termsAcceptedAt: now, termsVersion, identities: [{ provider, subject: identity.subject }] });
                     await store.audit({ actor: 'account:' + user._id, action: 'account.created', target: user._id, details: { provider } });
                 } catch (error) {

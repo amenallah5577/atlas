@@ -49,9 +49,9 @@ function normalizeInput(body, file) {
     return { text, mode, depth, filters, clientId: body.clientId, refresh };
 }
 
-function createAtlasRouter({ profileMiddleware, env = process.env, store = createStore(env), clients = providerClients({ env, store }), authProviders } = {}) {
+function createAtlasRouter({ profileMiddleware, env = process.env, store = createStore(env), clients = providerClients({ env, store }), authProviders, emailDelivery, verificationClock } = {}) {
     const router = express.Router();
-    const accounts = createAccounts({ store, env, providers: authProviders });
+    const accounts = createAccounts({ store, env, providers: authProviders, emailDelivery, verificationClock });
     const runs = new Map();
     const active = new Map();
     let draining = false;
@@ -70,8 +70,9 @@ function createAtlasRouter({ profileMiddleware, env = process.env, store = creat
         if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
             const origin = req.get('origin');
             try {
+                const embeddedSameOrigin = origin === 'null' && req.get('sec-fetch-site') === 'same-origin';
                 if (req.get('sec-fetch-site') === 'cross-site' ||
-                    (origin && new URL(origin).host !== req.get('host'))) throw new Error();
+                    (origin && !embeddedSameOrigin && new URL(origin).host !== req.get('host'))) throw new Error();
             } catch {
                 return res.status(403).json({ error: 'Use Atlas from its own website.' });
             }

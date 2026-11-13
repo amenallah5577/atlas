@@ -3,6 +3,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { AtlasError } = require('./research');
 const { identity, identities, oauthAttempt, validateAttemptLookup } = require('./oauth-identity');
+const { localVerificationStore } = require('./email-verification-store');
 
 // Personal, single-process storage. Hosted deployments continue to use MongoDB.
 function createLocalStore(filename) {
@@ -55,6 +56,7 @@ function createLocalStore(filename) {
         return { [key]: structuredClone(visible), next };
     }
     return {
+        ...localVerificationStore(() => data, change),
         ready() {},
         async list(owner, archived = false) {
             return Object.values(data.chats).filter(chat => chat.owner === owner && (chat.archived === true) === archived)
@@ -129,7 +131,7 @@ function createLocalStore(filename) {
                     createdAt: new Date(user.createdAt || Date.now()).toISOString()
                 };
                 if (linked.length) record.identities = linked;
-                for (const key of ['lastLoginAt', 'termsAcceptedAt']) {
+                for (const key of ['lastLoginAt', 'termsAcceptedAt', 'emailVerifiedAt']) {
                     if (user[key]) record[key] = new Date(user[key]).toISOString();
                 }
                 if (user.termsVersion) record.termsVersion = user.termsVersion;
@@ -143,6 +145,11 @@ function createLocalStore(filename) {
         },
         async userById(id) {
             return structuredClone(data.users[id] || null);
+        },
+        async verifyUserEmail(id, email, authVersion, at) {
+            const user = data.users[id];
+            if (!user || user.disabled || user.email !== email || (user.authVersion || 0) !== authVersion) return null;
+            return change(() => { user.emailVerifiedAt = new Date(at).toISOString(); user.lastLoginAt = new Date(at).toISOString(); return structuredClone(user); });
         },
         async userByIdentity(provider, subject) {
             const linked = identity(provider, subject);
@@ -296,6 +303,7 @@ function createLocalStore(filename) {
                 for (const chat of chats) delete data.chats[chat._id];
                 for (const [hash, session] of Object.entries(data.sessions)) if (session.userId === userId) delete data.sessions[hash];
                 for (const [hash, attempt] of Object.entries(data.oauthAttempts)) if (attempt.userId === userId) delete data.oauthAttempts[hash];
+                for (const [key, pending] of Object.entries(data.emailVerifications || {})) if (pending.userId === userId || pending.email === user.email) delete data.emailVerifications[key];
                 return true;
             });
         },

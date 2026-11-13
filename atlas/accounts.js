@@ -5,6 +5,7 @@ const { rateLimit } = require('express-rate-limit');
 const { AtlasError } = require('./research');
 const { createSocialAuth } = require('./social-auth');
 const { createAccountSettings } = require('./account-settings');
+const { createEmailVerification } = require('./email-verification');
 
 const scrypt = promisify(crypto.scrypt);
 const hashToken = token => crypto.createHash('sha256').update(token).digest('hex');
@@ -13,7 +14,7 @@ const TERMS_VERSION = '2026-11-11';
 const publicUser = (user, ownerId) => ({
     id: user._id, email: user.email, name: user.name || '', isAdmin: user._id === ownerId,
     hasPassword: Boolean(user.passwordHash), providers: [...new Set((user.identities || []).map(identity => identity.provider))],
-    avatarUrl: user.avatarUrl || '', createdAt: user.createdAt
+    avatarUrl: user.avatarUrl || '', createdAt: user.createdAt, emailVerified: Boolean(user.emailVerifiedAt)
 });
 
 async function hashPassword(password) {
@@ -37,9 +38,10 @@ function cookieToken(req, name) {
     return /^[a-f0-9]{64}$/.test(value || '') ? value : null;
 }
 
-function createAccounts({ store, env, providers }) {
+function createAccounts({ store, env, providers, emailDelivery, verificationClock }) {
     const router = express.Router();
     const ownerId = env.ATLAS_OWNER_ID;
+    const verification = createEmailVerification({ store, env, delivery: emailDelivery, clock: verificationClock });
     const cookieName = env.NODE_ENV === 'production' ? '__Host-atlas_auth' : 'atlas_auth';
     const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax', path: '/' };
     const route = handler => (req, res, next) => Promise.resolve().then(() => handler(req, res))
@@ -109,15 +111,34 @@ function createAccounts({ store, env, providers }) {
             throw new AtlasError(409, 'This address cannot be registered. Try signing in.');
         }
         const now = new Date().toISOString();
-        const user = { _id: crypto.randomUUID(), email, name, passwordHash: await hashPassword(password), disabled: false,
-            createdAt: now, lastLoginAt: now, termsAcceptedAt: now, termsVersion: TERMS_VERSION };
-        try { await store.createUser(user); } catch (error) {
-            if (error.code === 11000) throw new AtlasError(409, 'This address cannot be registered. Try signing in.');
-            throw error;
-        }
-        await store.audit({ actor: 'account:' + user._id, action: 'account.created', target: user._id, createdAt: now });
+        res.status(202).json(await verification.begin(req, res, { email, name, passwordHash: await hashPassword(password),
+            purpose: 'register', termsAcceptedAt: now, termsVersion: TERMS_VERSION }));
+    }));
+    router.get('/verification', route(async (req, res) => { res.json(await verification.pending(req)); }));
+    router.post('/verification/resend', route(async (req, res) => {
+        res.status(202).json(await verification.resend(req, req.body?.verificationId));
+    }));
+    router.post('/verification/confirm', passwordWork(async (req, res) => {
+        const pending = await verification.verify(req, req.body?.verificationId, req.body?.code);
+        const now = new Date().toISOString();
+        let user;
+        if (pending.purpose === 'register') {
+            if (!(await store.getSettings()).registrationEnabled) throw new AtlasError(403, 'New registrations are currently paused.');
+            if (pending.email === normalizeEmail(env.ATLAS_OWNER_EMAIL) || await store.userByEmail(pending.email)) {
+                throw new AtlasError(409, 'This address cannot be registered. Try signing in.');
+            }
+            user = await store.createUser({ _id: crypto.randomUUID(), email: pending.email, name: pending.name,
+                passwordHash: pending.passwordHash, emailVerifiedAt: now, createdAt: now, lastLoginAt: now,
+                termsAcceptedAt: pending.termsAcceptedAt, termsVersion: pending.termsVersion });
+            await store.audit({ actor: 'account:' + user._id, action: 'account.created', target: user._id, createdAt: now });
+        } else if (pending.purpose === 'login') {
+            user = await store.verifyUserEmail(pending.userId, pending.email, pending.authVersion, now);
+            if (!user) throw new AtlasError(401, 'Account access changed. Sign in again.');
+        } else throw new AtlasError(400, 'This verification request is invalid.');
+        await store.audit({ actor: 'account:' + user._id, action: 'account.email_verified', target: user._id, createdAt: now });
         await issue(req, res, user);
-        res.status(201).json({ user: publicUser(user, ownerId) });
+        verification.clear(res);
+        res.status(pending.purpose === 'register' ? 201 : 200).json({ user: publicUser(user, ownerId) });
     }));
     router.post('/login', passwordWork(async (req, res) => {
         const email = normalizeEmail(req.body?.email);
@@ -126,6 +147,10 @@ function createAccounts({ store, env, providers }) {
         const user = await store.userByEmail(email);
         const valid = await verifyPassword(password, user?.passwordHash || await dummyHash);
         if (!valid || !user || user.disabled) throw new AtlasError(401, 'Email or password is incorrect.');
+        if (!user.emailVerifiedAt) {
+            return res.status(202).json(await verification.begin(req, res, { email: user.email, purpose: 'login',
+                userId: user._id, authVersion: user.authVersion || 0 }));
+        }
         const now = new Date().toISOString();
         await store.updateUser(user._id, { lastLoginAt: now });
         await store.audit({ actor: 'account:' + user._id, action: 'account.login', target: user._id, createdAt: now });

@@ -631,6 +631,8 @@ function exportMarkdown() {
 let accountUser = null;
 let accountMode = 'signin';
 let accountBusy = false;
+let pendingVerification = null;
+let verificationTimer = null;
 let providerState = 'loading';
 const authProviders = [
     { id: 'google', name: 'Google', enabled: false },
@@ -671,6 +673,8 @@ function applyProfile(user) {
     const identity = user?.id || null;
     const changed = identity !== state.identity;
     if (changed) {
+        pendingVerification = null;
+        clearInterval(verificationTimer); verificationTimer = null;
         state.requests.abort();
         state.requests = new AbortController();
         state.identity = identity;
@@ -740,6 +744,61 @@ function setAccountBusy(busy) {
     accountBusy = busy;
     for (const control of document.querySelectorAll('#account-mount button:not([data-oauth]), [data-auth]')) control.disabled = busy;
     renderAuthProviders();
+    updateVerificationCountdown();
+}
+function updateVerificationCountdown() {
+    const control = document.querySelector('[data-resend-verification]');
+    if (!control || !pendingVerification) return;
+    const seconds = Math.max(0, Math.ceil((pendingVerification.resendAt - Date.now()) / 1000));
+    control.disabled = accountBusy || seconds > 0;
+    control.textContent = seconds ? 'Resend code in ' + seconds + 's' : 'Resend code';
+}
+function showVerification(data) {
+    pendingVerification = { ...data, resendAt: Date.now() + data.resendAfter * 1000 };
+    accountMode = 'verify';
+    renderAccount();
+    if (!$('account-dialog').open) $('account-dialog').showModal();
+}
+function renderVerification(mount, status) {
+    mount.append(element('p', 'Enter the six-digit code sent to ' + pendingVerification.email + '.', 'verification-description'));
+    mount.append(element('p', 'The code expires in 10 minutes. Check your spam folder if it has not arrived.', 'auth-help'));
+    const form = element('form', null, 'auth-form verification-form');
+    const input = accountField(form, 'Verification code', 'code', 'text', 'one-time-code');
+    input.inputMode = 'numeric'; input.pattern = '[0-9]{6}'; input.minLength = 6; input.maxLength = 6;
+    input.classList.add('verification-code');
+    const confirm = button('Verify email and continue', null, 'primary auth-submit', 'shield');
+    confirm.type = 'submit';
+    form.append(status, confirm);
+    const resend = button('Resend code', async () => {
+        if (accountBusy || resend.disabled) return;
+        setAccountBusy(true); status.textContent = '';
+        try {
+            const data = await api('/auth/verification/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verificationId: pendingVerification.id }) });
+            pendingVerification = { ...data.verification, resendAt: Date.now() + data.verification.resendAfter * 1000 };
+            input.value = ''; status.textContent = 'A new code was sent. Use the most recent email.'; input.focus();
+        } catch (error) { if (error.name !== 'AbortError') status.textContent = error.message; }
+        finally { setAccountBusy(false); }
+    }, 'quiet');
+    resend.dataset.resendVerification = '';
+    const change = button('Use a different email', () => { pendingVerification = null; openAccount('signup'); }, 'quiet');
+    const actions = element('div', null, 'verification-actions'); actions.append(resend, change);
+    form.append(actions); mount.append(form);
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (accountBusy || !form.reportValidity()) return;
+        setAccountBusy(true); status.textContent = '';
+        try {
+            const result = await api('/auth/verification/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verificationId: pendingVerification.id, code: input.value.trim() }) });
+            pendingVerification = null; clearInterval(verificationTimer); verificationTimer = null;
+            $('account-dialog').close(); form.reset(); applyProfile(result.user); announceAccountChange();
+            feedback('Email verified. Welcome to Atlas.');
+        } catch (error) { if (error.name !== 'AbortError') { status.textContent = error.message; input.select(); } }
+        finally { setAccountBusy(false); }
+    });
+    updateVerificationCountdown(); verificationTimer = setInterval(updateVerificationCountdown, 1000);
+    input.focus();
 }
 async function startOAuth(providerId) {
     if (accountBusy || !authProviders.some(item => item.id === providerId && item.enabled)) return;
@@ -778,16 +837,19 @@ function accountField(form, labelText, name, type, autocomplete) {
     return input;
 }
 function renderAccount() {
+    clearInterval(verificationTimer); verificationTimer = null;
     const signedIn = Boolean(accountUser);
+    const verifying = !signedIn && accountMode === 'verify' && Boolean(pendingVerification);
     const signup = accountMode === 'signup' && !signedIn;
-    labelWithIcon($('account-title'), signedIn ? 'Your account' : signup ? 'Create your Atlas account' : 'Sign in to Atlas',
+    labelWithIcon($('account-title'), verifying ? 'Verify your email' : signedIn ? 'Your account' : signup ? 'Create your Atlas account' : 'Sign in to Atlas',
         signedIn ? 'user' : signup ? 'user-plus' : 'login');
-    $('account-dialog').querySelector('.auth-switch').hidden = signedIn;
+    $('account-dialog').querySelector('.auth-switch').hidden = signedIn || verifying;
     for (const tab of document.querySelectorAll('[data-auth]')) tab.setAttribute('aria-pressed', String(tab.dataset.auth === accountMode));
     const mount = $('account-mount');
     mount.replaceChildren();
     const status = element('p', '', 'auth-status');
     status.setAttribute('role', 'status');
+    if (verifying) { renderVerification(mount, status); return; }
     if (signedIn) {
         mount.append(element('p', accountUser.email, 'account-email'));
         if (accountUser.isAdmin) {
@@ -868,7 +930,7 @@ function renderAccount() {
     if (signup) accountField(form, 'Name (optional)', 'name', 'text', 'name');
     accountField(form, 'Email address', 'email', 'email', 'email');
     accountField(form, 'Password', 'password', 'password', signup ? 'new-password' : 'current-password');
-    if (signup) form.append(element('p', 'Use 12–128 characters for your password.', 'auth-hint'));
+    if (signup) form.append(element('p', 'Use 12–128 characters for your password. We’ll email a code to verify your address.', 'auth-hint'));
     const submitButton = element('button', null, 'primary auth-submit');
     submitButton.type = 'submit';
     labelWithIcon(submitButton, signup ? 'Create account' : 'Sign in', signup ? 'user-plus' : 'login');
@@ -883,6 +945,7 @@ function renderAccount() {
         try {
             const data = await api(signup ? '/auth/register' : '/auth/login', { method: 'POST',
                 headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (data.verification) { form.reset(); showVerification(data.verification); return; }
             $('account-dialog').close();
             form.reset();
             applyProfile(data.user);
@@ -895,7 +958,7 @@ function renderAccount() {
 }
 function openAccount(mode) {
     if (accountBusy) return;
-    accountMode = mode;
+    accountMode = pendingVerification && ['signin', 'signup'].includes(mode) ? 'verify' : mode;
     renderAccount();
     if (!$('account-dialog').open) $('account-dialog').showModal();
 }
@@ -910,6 +973,12 @@ async function initializeAccountAccess() {
     }
     await initAccounts();
     initAuthProviders();
+    if (!accountUser) {
+        try {
+            const pending = await api('/auth/verification');
+            if (pending.verification) showVerification(pending.verification);
+        } catch { /* The normal sign-in form remains available if storage is unavailable. */ }
+    }
     if (!outcome) return;
     if (outcome === 'success' || outcome === 'linked') {
         if (!accountUser) {
@@ -1048,7 +1117,7 @@ for (const tab of document.querySelectorAll('[data-auth]')) {
     labelWithIcon(tab, tab.dataset.auth === 'signup' ? 'Sign up' : 'Sign in', tab.dataset.auth === 'signup' ? 'user-plus' : 'login');
     tab.addEventListener('click', () => openAccount(tab.dataset.auth));
 }
-$('account-dialog').addEventListener('close', () => { $('account-mount').replaceChildren(); });
+$('account-dialog').addEventListener('close', () => { clearInterval(verificationTimer); verificationTimer = null; $('account-mount').replaceChildren(); });
 window.addEventListener('storage', event => { if (event.key === 'atlas-account-change') initAccounts(); });
 window.addEventListener('focus', initAccounts);
 function updateDepthDescription() {

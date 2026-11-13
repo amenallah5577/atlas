@@ -100,7 +100,7 @@ async function fixture(t, options = {}) {
     async function member() {
         const password = 'account-controls-test-password-476';
         const user = await store.createUser({ _id: randomUUID(), email: randomUUID() + '@example.test', name: 'Fixture member',
-            passwordHash: await hashPassword(password), createdAt: new Date().toISOString() });
+            passwordHash: await hashPassword(password), emailVerifiedAt: new Date().toISOString(), createdAt: new Date().toISOString() });
         const call = client();
         assert.equal((await call('/auth/login', { email: user.email, password })).status, 200);
         return { user, call, password };

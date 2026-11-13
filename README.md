@@ -161,7 +161,7 @@ npm run check
 npm run eval:check
 ```
 
-The current automated suite contains **116 tests** covering model routing, free quota handling, research review, passage relevance, bounded evidence repair, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
+The current automated suite contains **118 tests** covering model routing, free quota handling, research review, passage relevance, bounded evidence repair, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks and issuer validation, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
 
 [GitHub Actions](https://github.com/amenallah5577/atlas/actions) runs installation, syntax checks, tests, and the evaluation dry run on pushes and pull requests. The [evaluation guide](eval/README.md) explains the fixed-source research benchmark. Fixture results do not establish live search accuracy or production readiness.
 

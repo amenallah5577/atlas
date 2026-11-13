@@ -5,9 +5,9 @@ const definitions = {
         authorization: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token',
         jwks: 'https://www.googleapis.com/oauth2/v3/certs', userinfo: 'https://openidconnect.googleapis.com/v1/userinfo',
         scope: 'openid email profile' },
-    github: { name: 'GitHub', issuer: 'https://github.com',
+    github: { name: 'GitHub', issuer: 'https://github.com/login/oauth',
         authorization: 'https://github.com/login/oauth/authorize', token: 'https://github.com/login/oauth/access_token',
-        scope: 'read:user user:email' },
+        scope: 'read:user user:email', authorizationResponseIssuer: true },
     microsoft: { name: 'Microsoft', issuer: 'https://login.microsoftonline.com/common/v2.0',
         authorization: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
         token: 'https://login.microsoftonline.com/common/oauth2/v2.0/token', scope: 'https://graph.microsoft.com/User.Read' }
@@ -35,7 +35,9 @@ function createProviders(env, request = fetch) {
             const client = await library;
             const provider = definitions[id];
             const result = new client.Configuration({ issuer: provider.issuer, authorization_endpoint: provider.authorization,
-                token_endpoint: provider.token, ...(provider.jwks ? { jwks_uri: provider.jwks, userinfo_endpoint: provider.userinfo } : {}) },
+                token_endpoint: provider.token,
+                ...(provider.authorizationResponseIssuer ? { authorization_response_iss_parameter_supported: true } : {}),
+                ...(provider.jwks ? { jwks_uri: provider.jwks, userinfo_endpoint: provider.userinfo } : {}) },
             env['ATLAS_' + id.toUpperCase() + '_CLIENT_ID'].trim(), {},
             client.ClientSecretPost(env['ATLAS_' + id.toUpperCase() + '_CLIENT_SECRET'].trim()));
             result.timeout = 15;

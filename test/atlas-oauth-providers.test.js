@@ -7,6 +7,8 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 20
 const jwk = { ...publicKey.export({ format: 'jwk' }), alg: 'RS256', use: 'sig', kid: 'fixture' };
 const verifier = 'a'.repeat(64), state = 'b'.repeat(64);
 const nonce = createHash('sha256').update(verifier).digest('base64url');
+const callbackQuery = id => 'code=fixture-code&state=' + state +
+    (id === 'github' ? '&iss=' + encodeURIComponent('https://github.com/login/oauth') : '');
 function jwt(patch = {}) {
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'fixture' })).toString('base64url');
     const payload = Buffer.from(JSON.stringify({ iss: 'https://accounts.google.com', aud: 'fixture-client', sub: 'google-subject',
@@ -59,7 +61,7 @@ for (const id of ['google', 'github', 'microsoft']) {
         assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
         assert.equal(url.searchParams.get('redirect_uri'), 'https://atlas.example/api/atlas/auth/oauth/' + id + '/callback');
         assert.equal(url.searchParams.has('client_secret'), false);
-        const result = await providers.identity(id, { state, codeVerifier: verifier, query: 'code=fixture-code&state=' + state });
+        const result = await providers.identity(id, { state, codeVerifier: verifier, query: callbackQuery(id) });
         assert.equal(result.email, 'person@example.test');
         assert.equal(result.name, 'Person');
         assert.deepEqual(Object.keys(result).sort(), ['email', 'emailVerified', 'name', 'subject']);
@@ -82,7 +84,7 @@ test('Google rejects an invalid signature, nonce, audience, issuer, expiry, or U
 test('unverified Google and GitHub addresses cannot supply a signup email', async () => {
     for (const [id, profilePatch] of [['google', { email_verified: false }], ['github', { verified: false }]]) {
         const { providers } = fixture(id, { profilePatch });
-        assert.equal((await providers.identity(id, { state, codeVerifier: verifier, query: 'code=fixture-code&state=' + state })).email, '');
+        assert.equal((await providers.identity(id, { state, codeVerifier: verifier, query: callbackQuery(id) })).email, '');
     }
 });
 
@@ -96,6 +98,21 @@ test('removed providers cannot become available through stale environment creden
 
 test('code exchange rejects the wrong OAuth state before contacting the provider', async () => {
     const { providers, requests } = fixture('github');
-    await assert.rejects(providers.identity('github', { state, codeVerifier: verifier, query: 'code=fixture-code&state=wrong' }));
+    await assert.rejects(providers.identity('github', { state, codeVerifier: verifier,
+        query: 'code=fixture-code&state=wrong&iss=' + encodeURIComponent('https://github.com/login/oauth') }));
     assert.equal(requests.length, 0);
+});
+
+test('GitHub accepts its published OAuth issuer and rejects missing, foreign, or repeated issuers before exchange', async () => {
+    const query = 'code=fixture-code&state=' + state;
+    const { providers } = fixture('github');
+    assert.equal((await providers.identity('github', { state, codeVerifier: verifier,
+        query: query + '&iss=' + encodeURIComponent('https://github.com/login/oauth') })).subject, '123');
+    for (const issuer of ['', '&iss=' + encodeURIComponent('https://attacker.example'),
+        '&iss=' + encodeURIComponent('https://github.com'),
+        '&iss=' + encodeURIComponent('https://github.com/login/oauth') + '&iss=' + encodeURIComponent('https://github.com/login/oauth')]) {
+        const { providers: invalid, requests } = fixture('github');
+        await assert.rejects(invalid.identity('github', { state, codeVerifier: verifier, query: query + issuer }));
+        assert.equal(requests.length, 0);
+    }
 });

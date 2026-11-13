@@ -10,7 +10,7 @@
 
 **Atlas is the upgraded, chat-first version of [EchoSphere](https://github.com/amenallah5577/EchoSphere).** Ask a question, write something, explore jobs, compare products, or analyze a PDF from the same conversation.
 
-Atlas opens at **`/atlas`**. The original EchoSphere interface remains available at `/` as part of the project's foundation.
+**[Open the live Atlas app](https://echosphere-atlas.onrender.com/).** The hosted standalone app opens Atlas at `/` and `/atlas`. With the default local configuration, Atlas opens at `/atlas` and the original EchoSphere interface remains at `/`.
 
 [Getting started](#getting-started) · [Model configuration](#model-configuration) · [Accounts and administration](#accounts-and-administration) · [Documentation](#documentation)
 
@@ -161,13 +161,14 @@ npm run check
 npm run eval:check
 ```
 
-The current automated suite contains **102 tests** covering model routing, free quota handling, research review, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
+The current automated suite contains **106 tests** covering model routing, free quota handling, research review, passage relevance, bounded evidence repair, conversation context, evidence validation, PDF parsing, account isolation, OAuth callbacks, profile photos, preferences, session revocation, parental PIN controls, archives, exports, and deletion races.
 
 [GitHub Actions](https://github.com/amenallah5577/atlas/actions) runs installation, syntax checks, tests, and the evaluation dry run on pushes and pull requests. The [evaluation guide](eval/README.md) explains the fixed-source research benchmark. Fixture results do not establish live search accuracy or production readiness.
 
 ## Deployment notes and current limits
 
 - Hosted deployments require MongoDB, HTTPS, stable secrets, owner provisioning, and the selected provider credentials. A GitHub push does not configure or deploy these services.
+- The public preview uses a Render Free service and MongoDB Atlas Free storage. Render can take about a minute to wake after inactivity. This service is deployed manually after the GitHub checks pass; see the [deployment guide](docs/deployment.md).
 - Use one Express process with the current in-memory research coordinator and cancellation state.
 - PDFs are processed in memory; saved answers retain relevant excerpts. Scanned PDFs need OCR before they can be meaningfully analyzed.
 - Parental controls protect this account's browsing and upload settings with a PIN. The explicit-content text filter is limited, and separate parent/child account linking is not implemented.

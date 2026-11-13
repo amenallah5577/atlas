@@ -81,7 +81,7 @@ function createModelRouter({ env, store, request, AtlasError }) {
         })().finally(() => { pendingCatalogue = null; });
         return pendingCatalogue;
     }
-    async function reserve(model, maxTokens, messages, signal, { depth, onWait }) {
+    async function reserve(model, maxTokens, messages, signal, { depth, purpose, onWait }) {
         const estimate = Math.ceil(Buffer.byteLength(JSON.stringify(messages)) / 2) + maxTokens + 100;
         if (provider === 'groq') {
             const prefix = provider + '-' + model + '-';
@@ -93,7 +93,7 @@ function createModelRouter({ env, store, request, AtlasError }) {
             catch (error) {
                 // Wait only for a local minute reservation, before any provider request.
                 // Provider errors are never retried or routed to a paid fallback.
-                if (depth !== 'detailed' || error.status !== 429 || !(error.retryAfter > 0 && error.retryAfter <= 60)) throw error;
+                if ((depth !== 'detailed' && purpose !== 'repair') || error.status !== 429 || !(error.retryAfter > 0 && error.retryAfter <= 60)) throw error;
                 onWait?.('Waiting for the free model allowance to reset');
                 await require('node:timers/promises').setTimeout(error.retryAfter * 1000 + 50, undefined, { signal });
                 signal.throwIfAborted();
@@ -157,7 +157,7 @@ function createModelRouter({ env, store, request, AtlasError }) {
                 maxTokens = Math.min(maxTokens, 7400 - Math.ceil(Buffer.byteLength(JSON.stringify(messages)) / 2));
                 if (maxTokens < 550) throw new AtlasError(429, 'This request is too large for the free model allowance. Shorten it or start a new chat.', 60);
             }
-            await reserve(model, maxTokens, messages, signal, { depth, onWait });
+            await reserve(model, maxTokens, messages, signal, { depth, purpose, onWait });
             const reasoning = purpose === 'plan' ? 'low' : depth === 'detailed' ? 'high' : 'low';
             const body = provider === 'groq' ? {
                 model, messages, max_completion_tokens: maxTokens,

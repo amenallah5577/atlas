@@ -94,6 +94,22 @@ test('cancelling a free-quota wait prevents the provider request', async () => {
     assert.equal(requests, 0);
 });
 
+test('Quick evidence repair can wait for a local minute limit while its run remains cancelable', async () => {
+    let tokenAttempts = 0, requests = 0, waits = 0;
+    const clients = providerClients({
+        env: { ATLAS_FREE_PROVIDERS_CONFIRMED: 'true', ATLAS_GROQ_API_KEY: 'fixture' },
+        store: { async reserve(name, window) {
+            if (window === 'minute' && name.endsWith('-tokens') && ++tokenAttempts === 1) {
+                throw new AtlasError(429, 'Minute limit', .001);
+            }
+        } },
+        request: async () => { requests++; return ok({ choices: [{ message: { content: 'Repaired answer' } }] }); }
+    });
+    await clients.complete(messages, true, signal(), { depth: 'quick', purpose: 'repair', onWait: () => waits++ });
+    assert.equal(waits, 1);
+    assert.equal(requests, 1);
+});
+
 test('long Groq chats trim older context and preserve the current question', async () => {
     let body;
     const clients = providerClients({
@@ -167,6 +183,30 @@ test('a review quota failure retains validated findings and marks the review inc
 test('repair and review share one call budget; repairs cannot create a fourth model call',async()=>{
  const {clients,record}=workflows({repair:true});const report=await run('detailed',clients);
  assert.deepEqual(record.calls.map(c=>c.purpose),['plan','answer','repair']);assert.equal(report.verification.status,'partial');assert.equal(report.usage.calls,3);
+});
+
+test('claims stripped by evidence validation get one bounded repair instead of an empty success', async () => {
+    const { clients, record } = workflows();
+    const complete = clients.complete;
+    clients.complete = async (...args) => {
+        if (args[3].purpose === 'answer') {
+            record.calls.push({ purpose: 'answer' });
+            return { content: JSON.stringify({ findings: [{ text: 'Invented battery result', quote: sourceText, source: 1, passage: 1 }] }) };
+        }
+        return complete(...args);
+    };
+    const report = await run('quick', clients);
+    assert.deepEqual(record.calls.map(call => call.purpose), ['answer', 'repair']);
+    assert.equal(report.usage.calls, 2);
+    assert.equal(report.findings[0].text, '14 hours');
+});
+
+test('an explicitly unsupported answer does not force a second inference', async () => {
+    const { clients, record } = workflows();
+    clients.complete = async () => { record.calls.push({ purpose: 'answer' }); return { content: '{"findings":[],"assessments":[],"listings":[]}' }; };
+    const report = await run('quick', clients);
+    assert.equal(report.usage.calls, 1);
+    assert.match(report.text, /could not establish/);
 });
 
 test('both chat modes use one model call and no search, with different instructions',async()=>{

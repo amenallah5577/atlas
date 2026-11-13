@@ -2,6 +2,8 @@
 
 The repository includes `render.yaml` for a separate Node.js web service. The service opens Atlas at `/` and `/atlas`, uses MongoDB for durable accounts and chats, and keeps the original EchoSphere service unchanged. The application currently requires a single running instance because active research is coordinated in process memory.
 
+The current public preview is **[echosphere-atlas.onrender.com](https://echosphere-atlas.onrender.com/)**. It uses a separately created Render Free service in Frankfurt and a MongoDB Atlas Free cluster. Its public-Git connection uses manual deployments: after GitHub checks pass, open the service in Render and choose **Manual Deploy → Deploy latest commit**. The Blueprint's automatic deployment setting applies when deploying through that Blueprint instead.
+
 ## Private configuration
 
 Use a hosted MongoDB database, such as a MongoDB Atlas Free cluster, with an application database user and network access for the Render service. Keep the connection string, provider keys, and owner credentials out of Git. Do not upload the local development database or test accounts as deployment assets.

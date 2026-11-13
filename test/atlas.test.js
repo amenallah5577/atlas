@@ -75,6 +75,20 @@ test('rejects injected passages, snippet-only listings, invalid links, and alter
     assert.deepEqual(result.listings, []);
 });
 
+test('passage retrieval selects an API section and explanation ahead of repeated navigation', () => {
+    const navigation = ['RequestSignal.timeout', 'RequestSignal.any', 'RequestSignal.abort', 'Node.js globals']
+        .map(label => '[' + label + '](#' + label + ')').join(' ');
+    const explanation = 'A signal becomes aborted once the configured waiting period has elapsed.';
+    const document = [navigation, navigation, '### Node.js worker behavior',
+        'Node.js documentation describes worker globals and supported schemes in this section.',
+        '### RequestSignal.timeout(delay)', 'The delay is expressed in milliseconds.', explanation,
+        '### RequestSignal.any(signals)', 'A different API combines several signals.'].join('\n\n');
+    const [passage] = selectPassages(document, 'Search the official Node.js documentation and explain the purpose of RequestSignal.timeout with one supported finding.', 1);
+    assert.match(passage, /RequestSignal\.timeout\(delay\)/);
+    assert.ok(passage.includes(explanation));
+    assert.ok(!passage.includes('RequestSignal.any'));
+});
+
 test('research reuses server-owned evidence for follow-ups and shares a bounded call budget', async () => {
     let searches = 0;
     let calls = 0;

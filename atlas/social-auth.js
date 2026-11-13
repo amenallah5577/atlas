@@ -6,6 +6,13 @@ const { createProviders } = require('./oauth-providers');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const random = () => crypto.randomBytes(32).toString('hex');
 const normalizeEmail = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
+const diagnosticCodes = new Set(['OAUTH_INVALID_RESPONSE', 'OAUTH_RESPONSE_BODY_ERROR', 'OAUTH_AUTHORIZATION_RESPONSE_ERROR',
+    'OAUTH_JWT_CLAIM_COMPARISON_FAILED', 'OAUTH_JWT_TIMESTAMP_CHECK_FAILED', 'OAUTH_KEY_SELECTION_FAILED',
+    'ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT']);
+function failureDiagnostic(provider, stage, error) {
+    const code = [error?.code, error?.cause?.code].find(value => diagnosticCodes.has(value)) || 'unclassified';
+    return { event: 'atlas.oauth_failed', provider: ['google', 'github', 'microsoft'].includes(provider) ? provider : 'unknown', stage, code };
+}
 
 function createSocialAuth({ store, env, issue, current, verifyPassword, passwordWork, termsVersion, providers = createProviders(env) }) {
     const router = express.Router();
@@ -45,6 +52,7 @@ function createSocialAuth({ store, env, issue, current, verifyPassword, password
         const browser = req.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith(cookieName + '='))?.slice(cookieName.length + 1);
         if (params.getAll('state').length !== 1 || !/^[a-f0-9]{64}$/.test(state || '') || !/^[a-f0-9]{64}$/.test(browser || '')) return finish('expired');
         let acquired = false;
+        let stage = 'attempt';
         try {
             const attempt = await store.consumeOAuthAttempt(hash(state), hash(browser), provider);
             if (!attempt) return finish('expired');
@@ -55,8 +63,10 @@ function createSocialAuth({ store, env, issue, current, verifyPassword, password
             if (exchanges >= 4) return finish('provider_failed');
             exchanges++;
             acquired = true;
+            stage = 'identity';
             const identity = await providers.identity(provider, { query: params.toString(), state, codeVerifier: attempt.codeVerifier });
             if (typeof identity.subject !== 'string' || !identity.subject || identity.subject.length > 255) return finish('provider_failed');
+            stage = 'account';
             let user = await store.userByIdentity(provider, identity.subject);
             if (attempt.userId) {
                 // The provider round trip may outlive a logout in another tab.
@@ -92,11 +102,12 @@ function createSocialAuth({ store, env, issue, current, verifyPassword, password
             await store.audit({ actor: 'account:' + user._id, action: 'account.login', target: user._id, details: { provider } });
             await issue(req, res, user);
             return finish('success', true);
-        } catch {
+        } catch (error) {
             // Provider errors can contain codes and tokens. Never expose or log their bodies.
+            console.warn(JSON.stringify(failureDiagnostic(provider, stage, error)));
             return finish('provider_failed');
         } finally { if (acquired) exchanges--; }
     });
     return router;
 }
-module.exports = { createSocialAuth };
+module.exports = { createSocialAuth, failureDiagnostic };

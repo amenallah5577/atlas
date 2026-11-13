@@ -1,5 +1,16 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { failureDiagnostic } = require('../atlas/social-auth');
+
+test('OAuth diagnostics contain only fixed categories and never provider error contents', () => {
+    const secret = 'never-log-provider-code-token-or-email';
+    const diagnostic = failureDiagnostic('github', 'identity', { message: secret, code: secret,
+        cause: { code: 'OAUTH_INVALID_RESPONSE', body: { access_token: secret, error_description: secret } } });
+    assert.deepEqual(diagnostic, { event: 'atlas.oauth_failed', provider: 'github', stage: 'identity', code: 'OAUTH_INVALID_RESPONSE' });
+    assert.equal(JSON.stringify(diagnostic).includes(secret), false);
+    assert.equal(failureDiagnostic(secret, 'account', { code: secret }).provider, 'unknown');
+    assert.equal(failureDiagnostic('google', 'account', { code: secret }).code, 'unclassified');
+});
 const { createHash, randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');

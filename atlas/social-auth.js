@@ -11,7 +11,10 @@ const diagnosticCodes = new Set(['OAUTH_INVALID_RESPONSE', 'OAUTH_RESPONSE_BODY_
     'ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT']);
 function failureDiagnostic(provider, stage, error) {
     const code = [error?.code, error?.cause?.code].find(value => diagnosticCodes.has(value)) || 'unclassified';
-    return { event: 'atlas.oauth_failed', provider: ['google', 'github', 'microsoft'].includes(provider) ? provider : 'unknown', stage, code };
+    const providerError = error?.cause?.cause?.body?.error;
+    const reason = ['bad_verification_code', 'incorrect_client_credentials', 'redirect_uri_mismatch', 'invalid_grant', 'invalid_client'].includes(providerError)
+        ? providerError : 'unclassified';
+    return { event: 'atlas.oauth_failed', provider: ['google', 'github', 'microsoft'].includes(provider) ? provider : 'unknown', stage, code, reason };
 }
 
 function createSocialAuth({ store, env, issue, current, verifyPassword, passwordWork, termsVersion, providers = createProviders(env) }) {

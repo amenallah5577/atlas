@@ -6,10 +6,11 @@ test('OAuth diagnostics contain only fixed categories and never provider error c
     const secret = 'never-log-provider-code-token-or-email';
     const diagnostic = failureDiagnostic('github', 'identity', { message: secret, code: secret,
         cause: { code: 'OAUTH_INVALID_RESPONSE', body: { access_token: secret, error_description: secret } } });
-    assert.deepEqual(diagnostic, { event: 'atlas.oauth_failed', provider: 'github', stage: 'identity', code: 'OAUTH_INVALID_RESPONSE' });
+    assert.deepEqual(diagnostic, { event: 'atlas.oauth_failed', provider: 'github', stage: 'identity', code: 'OAUTH_INVALID_RESPONSE', reason: 'unclassified' });
     assert.equal(JSON.stringify(diagnostic).includes(secret), false);
     assert.equal(failureDiagnostic(secret, 'account', { code: secret }).provider, 'unknown');
     assert.equal(failureDiagnostic('google', 'account', { code: secret }).code, 'unclassified');
+    assert.equal(failureDiagnostic('github', 'identity', { cause: { cause: { body: { error: 'bad_verification_code', access_token: secret } } } }).reason, 'bad_verification_code');
 });
 const { createHash, randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
